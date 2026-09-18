@@ -1,0 +1,43 @@
+db_path: data/lookalike.duckdb
+log_level: INFO
+log_json: true
+
+ct:
+  source: certstream
+  # Local certstream-server-go (see docker-compose.yml). The public calidog
+  # server accepted connections but sent no messages when checked (2026-09-18).
+  certstream_url: ws://localhost:8080/
+  flush_interval_s: 5
+  flush_max_rows: 500
+
+scoring:
+  alert_threshold: 0.7
+  store_floor: 0.4
+  min_typo_similarity: 0.8
+  min_substring_token_len: 5
+  sensitive_keywords:
+    [login, signin, secure, security, support, verify, verification, account,
+     update, billing, payment, wallet, auth, recover, unlock, helpdesk, service]
+  free_dv_issuers: ["Let's Encrypt", ZeroSSL, Google Trust Services, cPanel]
+
+brands:
+  - name: paypal
+    tokens: [paypal]
+    official_domains: [paypal.com, paypal.me, paypalobjects.com]
+  - name: microsoft
+    tokens: [microsoft, office365, outlook]
+    official_domains: [microsoft.com, office.com, office365.com, outlook.com, live.com, microsoftonline.com]
+  - name: apple
+    tokens: [apple, icloud]
+    official_domains: [apple.com, icloud.com]
+    negative_tokens: [pineapple, applebee, snapple, grapple]
+  - name: netflix
+    tokens: [netflix]
+    official_domains: [netflix.com, netflix.net, nflxext.com]
+  - name: amazon
+    tokens: [amazon]
+    official_domains: [amazon.com, amazon.fr, amazon.de, amazon.co.uk, amazonaws.com]
+  - name: ameli
+    tokens: [ameli]
+    official_domains: [ameli.fr]
+    negative_tokens: [amelia, cameli, pamela]
