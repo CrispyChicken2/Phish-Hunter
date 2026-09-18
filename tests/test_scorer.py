@@ -31,6 +31,10 @@ def top_score(scorer: Scorer, fqdn: str, issuer: str | None = None) -> float:
         "google.com",
         "amelia-bakery.fr",
         "applebees-menu.com",
+        # Regressions found on live CT data:
+        "status.doubleu-cloud.de",
+        "x.europe-west4.managedkafka.cloud.goog",
+        "app14.shop",
     ],
 )
 def test_benign_hostnames_are_not_alerts(scorer: Scorer, fqdn: str) -> None:

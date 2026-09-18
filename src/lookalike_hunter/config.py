@@ -55,6 +55,9 @@ class ScoringConfig(BaseModel):
     alert_threshold: float = 0.7
     store_floor: float = 0.4
     min_typo_similarity: float = 0.8
+    # One edit on a short token collides with too much real namespace ("app14" vs
+    # "apple"); short tokens rely on exact dnstwist Variants instead.
+    min_typo_token_len: int = 6
     # Tokens shorter than this must match a whole label part, never a substring.
     min_substring_token_len: int = 5
     weights: ScoringWeights = Field(default_factory=ScoringWeights)

@@ -10,3 +10,6 @@ data/*
 .env
 *.duckdb
 *.duckdb.wal
+# Machine-specific: TLS-intercepting proxy / antivirus root CA, see README
+docker/local-ca/
+docker-compose.override.yml

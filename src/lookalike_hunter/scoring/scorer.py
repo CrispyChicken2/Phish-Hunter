@@ -74,6 +74,9 @@ class _BrandMatcher:
         self.raw_tokens = brand.tokens
         self.negatives = [skeleton(t) for t in brand.negative_tokens]
         self.min_len = config.min_substring_token_len
+        self.typo_tokens = [
+            skeleton(t) for t in brand.tokens if len(t) >= config.min_typo_token_len
+        ]
 
     def strip_negatives(self, text: str) -> str:
         for neg in self.negatives:
@@ -92,8 +95,10 @@ class _BrandMatcher:
             (
                 DamerauLevenshtein.normalized_similarity(part, token)
                 for part in candidates
-                for token in self.tokens
-                if part.strip()
+                for token in self.typo_tokens
+                # Shorter parts are deletions: dnstwist already enumerates those
+                # exactly, and fuzzy-matching them is noisy ("appl4" vs "apple").
+                if len(part) >= len(token)
             ),
             default=0.0,
         )

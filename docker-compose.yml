@@ -1,0 +1,8 @@
+services:
+  # Local Certificate Transparency aggregator exposing a certstream-compatible
+  # websocket on ws://localhost:8080/ (the public calidog server is unreliable).
+  certstream:
+    image: 0rickyy0/certstream-server-go:v1.10.1
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"

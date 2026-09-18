@@ -1,6 +1,6 @@
 """Hostname normalisation: punycode decoding and confusable-character skeletons.
 
-The skeleton is intentionally lossy (``cl`` -> ``d`` also rewrites ``cloud``). It is
+The skeleton is intentionally lossy (``rn`` -> ``m`` also rewrites ``modern``). It is
 only meaningful when both sides of a comparison are skeletonised, so brand tokens
 go through :func:`skeleton` too. Never store it as an identity.
 """
@@ -28,7 +28,9 @@ _CHAR_MAP: dict[str, str] = {
 
 # Multi-character sequences that render like a single letter. Applied after the
 # character map, longest first.
-_SEQ_MAP: tuple[tuple[str, str], ...] = (("rn", "m"), ("vv", "w"), ("cl", "d"))
+# ``cl`` -> ``d`` is deliberately absent: it rewrites every ``cloud`` and caused
+# false positives against ``icloud`` on live CT data.
+_SEQ_MAP: tuple[tuple[str, str], ...] = (("rn", "m"), ("vv", "w"))
 
 _TRANSLATION = str.maketrans(_CHAR_MAP)
 

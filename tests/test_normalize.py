@@ -13,6 +13,7 @@ from lookalike_hunter.scoring.normalize import decode_idna, skeleton
         ("аррӏе.com", "apple.com"),  # Cyrillic а, р, р, palochka, е
         ("amazön.fr", "amazon.fr"),
         ("netf1ix-l0gin.net", "netflix-login.net"),
+        ("icloud.com", "icloud.com"),
     ],
 )
 def test_skeleton_collapses_confusables(raw: str, expected: str) -> None:
