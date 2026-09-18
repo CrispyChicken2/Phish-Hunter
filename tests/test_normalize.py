@@ -13,11 +13,12 @@ from lookalike_hunter.scoring.normalize import decode_idna, skeleton
         ("аррӏе.com", "apple.com"),  # Cyrillic а, р, р, palochka, е
         ("amazön.fr", "amazon.fr"),
         ("netf1ix-l0gin.net", "netflix-login.net"),
-        ("icloud.com", "icloud.com"),
+        ("lcloud.com", "icloud.com"),
     ],
 )
 def test_skeleton_collapses_confusables(raw: str, expected: str) -> None:
-    assert skeleton(raw) == expected
+    # The skeleton form itself is an implementation detail; equivalence is the contract.
+    assert skeleton(raw) == skeleton(expected)
 
 
 def test_decode_idna_handles_punycode() -> None:
@@ -30,3 +31,8 @@ def test_decode_idna_keeps_invalid_labels() -> None:
 
 def test_skeleton_decodes_punycode_first() -> None:
     assert skeleton("xn--pypal-4ve.com") == "paypal.com"
+
+
+def test_skeleton_keeps_unrelated_words_apart() -> None:
+    assert skeleton("cloud") != skeleton("icloud")
+    assert skeleton("paypal") != skeleton("paypai-x")

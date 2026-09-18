@@ -73,6 +73,11 @@ def test_features_explain_the_score(scorer: Scorer) -> None:
     assert variant.features.known_variant_fuzzers == ["omission"]
 
 
+def test_keywords_survive_skeleton(scorer: Scorer) -> None:
+    (match,) = scorer.score("icloud-verify-signin.live")
+    assert set(match.features.keyword_hits) == {"verify", "signin"}
+
+
 def test_keywords_increase_score(scorer: Scorer) -> None:
     assert top_score(scorer, "paypal-login-verify.com") > top_score(scorer, "paypal-shop.com")
 

@@ -18,7 +18,7 @@ scoring:
   alert_threshold: 0.7
   store_floor: 0.4
   min_typo_similarity: 0.8
-  min_typo_token_len: 6
+  min_typo_token_len: 7
   min_substring_token_len: 5
   sensitive_keywords:
     [login, signin, secure, security, support, verify, verification, account,
@@ -44,7 +44,7 @@ brands:
   - name: amazon
     tokens: [amazon]
     official_domains: [amazon.com, amazon.fr, amazon.de, amazon.co.uk, amazonaws.com, amazon.dev,
-                       amazonwebservices.com.cn]
+                       amazonwebservices.com.cn, amazonaws.com.cn, amazonaws.eu, amazonwebservices.eu]
   - name: ameli
     tokens: [ameli]
     official_domains: [ameli.fr]

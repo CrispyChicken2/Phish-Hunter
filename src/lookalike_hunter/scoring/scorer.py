@@ -114,7 +114,9 @@ class Scorer:
         self._config = config
         self._matchers = [_BrandMatcher(b, config) for b in brands]
         self._variants = variants
-        self._keywords = [k.lower() for k in config.sensitive_keywords]
+        # (skeleton, readable) pairs: match on the skeleton like hostnames, otherwise
+        # "login" never matches "logln"; report the readable keyword.
+        self._keywords = [(skeleton(k), k.lower()) for k in config.sensitive_keywords]
         self._free_dv = [i.lower() for i in config.free_dv_issuers]
 
     def score(self, raw_hostname: str, issuer_org: str | None = None) -> list[Match]:
@@ -174,7 +176,7 @@ class Scorer:
         stripped = full_sk
         for token in m.tokens:
             stripped = stripped.replace(token, " ")
-        keywords = [k for k in self._keywords if k in stripped]
+        keywords = [word for sk, word in self._keywords if sk in stripped]
         return MatchFeatures(
             known_variant_fuzzers=fuzzers,
             typo_similarity=round(m.typo_similarity(host), 4),

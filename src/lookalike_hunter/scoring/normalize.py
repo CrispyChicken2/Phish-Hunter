@@ -24,6 +24,8 @@ _CHAR_MAP: dict[str, str] = {
     "ı": "i", "ł": "l", "ø": "o", "đ": "d", "ħ": "h", "ɡ": "g",
     # Digits
     "0": "o", "1": "l", "3": "e", "5": "s",
+    # I/l/1 are one confusable class: "lcloud" must read as "icloud".
+    "i": "l",
 }  # fmt: skip
 
 # Multi-character sequences that render like a single letter. Applied after the
