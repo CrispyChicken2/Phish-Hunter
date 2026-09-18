@@ -21,7 +21,9 @@ scoring:
   min_substring_token_len: 5
   sensitive_keywords:
     [login, signin, secure, security, support, verify, verification, account,
-     update, billing, payment, wallet, auth, recover, unlock, helpdesk, service]
+     update, billing, payment, wallet, auth, recover, unlock, helpdesk, service,
+     # French (ameli and other FR brands)
+     compte, connexion, remboursement, securite, carte, vitale, espace, assure]
   free_dv_issuers: ["Let's Encrypt", ZeroSSL, Google Trust Services, cPanel]
 
 brands:
