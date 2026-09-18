@@ -62,6 +62,10 @@ class ScoringConfig(BaseModel):
     free_dv_issuers: list[str] = Field(default_factory=list)
 
 
+class VariantsConfig(BaseModel):
+    swap_tlds: list[str] = Field(default_factory=list)
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="LH_", env_nested_delimiter="__")
 
@@ -70,6 +74,7 @@ class Settings(BaseSettings):
     log_json: bool = True
     ct: CTConfig = Field(default_factory=CTConfig)
     scoring: ScoringConfig = Field(default_factory=ScoringConfig)
+    variants: VariantsConfig = Field(default_factory=VariantsConfig)
     brands: list[BrandConfig] = Field(default_factory=list)
 
     @classmethod

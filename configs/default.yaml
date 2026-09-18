@@ -10,6 +10,10 @@ ct:
   flush_interval_s: 5
   flush_max_rows: 500
 
+variants:
+  # TLDs used by the dnstwist tld-swap fuzzer.
+  swap_tlds: [com, net, org, info, co, io, app, online, site, xyz, top, shop, support, fr, us]
+
 scoring:
   alert_threshold: 0.7
   store_floor: 0.4
