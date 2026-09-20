@@ -21,7 +21,7 @@ import tldextract
 from rapidfuzz.distance import DamerauLevenshtein
 
 from lookalike_hunter.config import BrandConfig, ScoringConfig
-from lookalike_hunter.scoring.normalize import decode_idna, skeleton
+from lookalike_hunter.scoring.normalize import decode_idna, loose_skeleton, skeleton
 from lookalike_hunter.variants.generator import Variant, VariantIndex
 
 _PART_SPLIT = re.compile(r"[^a-z]+")
@@ -62,6 +62,8 @@ class _Host:
     registered_domain: str
     label_sk: str  # skeleton of the registrable label ("paypal" in paypal.co.uk)
     subdomain_sk: str
+    label_loose: str  # loose skeleton: whole-word comparison only
+    subdomain_loose: str
     label_raw: str  # Unicode-decoded, before confusable collapsing
     subdomain_raw: str
 
@@ -71,11 +73,12 @@ class _BrandMatcher:
         self.brand = brand
         self.official = frozenset(brand.official_domains)
         self.tokens = [skeleton(t) for t in brand.tokens]
+        self.loose_tokens = [loose_skeleton(t) for t in brand.tokens]
         self.raw_tokens = brand.tokens
         self.negatives = [skeleton(t) for t in brand.negative_tokens]
         self.min_len = config.min_substring_token_len
         self.typo_tokens = [
-            skeleton(t) for t in brand.tokens if len(t) >= config.min_typo_token_len
+            loose_skeleton(t) for t in brand.tokens if len(t) >= config.min_typo_token_len
         ]
 
     def strip_negatives(self, text: str) -> str:
@@ -88,8 +91,17 @@ class _BrandMatcher:
         parts = set(_PART_SPLIT.split(text))
         return any((t in text) if len(t) >= self.min_len else (t in parts) for t in tokens)
 
+    def matches_loose_word(self, loose_text: str) -> bool:
+        """A whole hyphen/digit-separated word equals a token under loose confusables.
+
+        Anchored to word boundaries on purpose: searching a loose token as a substring
+        matches any word ending in "l" followed by "cloud".
+        """
+        parts = set(_PART_SPLIT.split(self.strip_negatives(loose_text)))
+        return any(t in parts for t in self.loose_tokens)
+
     def typo_similarity(self, host: _Host) -> float:
-        label = self.strip_negatives(host.label_sk)
+        label = self.strip_negatives(host.label_loose)
         candidates = {label, *_PART_SPLIT.split(label)}
         return max(
             (
@@ -154,6 +166,8 @@ class Scorer:
             registered_domain=registered,
             label_sk=skeleton(ext.domain),
             subdomain_sk=skeleton(ext.subdomain),
+            label_loose=loose_skeleton(ext.domain),
+            subdomain_loose=loose_skeleton(ext.subdomain),
             label_raw=decode_idna(ext.domain),
             subdomain_raw=decode_idna(ext.subdomain),
         )
@@ -167,8 +181,12 @@ class Scorer:
         full_sk: str,
     ) -> MatchFeatures:
         fuzzers = sorted({v.fuzzer for v in variant_hits if v.brand == m.brand.name})
-        in_label = m.contains_token(host.label_sk, m.tokens)
-        in_sub = m.contains_token(host.subdomain_sk, m.tokens)
+        in_label = m.contains_token(host.label_sk, m.tokens) or m.matches_loose_word(
+            host.label_loose
+        )
+        in_sub = m.contains_token(host.subdomain_sk, m.tokens) or m.matches_loose_word(
+            host.subdomain_loose
+        )
         homoglyph = (in_label or in_sub) and not (
             m.contains_token(host.label_raw, m.raw_tokens)
             or m.contains_token(host.subdomain_raw, m.raw_tokens)

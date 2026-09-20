@@ -35,6 +35,15 @@ def top_score(scorer: Scorer, fqdn: str, issuer: str | None = None) -> float:
         "status.doubleu-cloud.de",
         "x.europe-west4.managedkafka.cloud.goog",
         "app14.shop",
+        # "<word ending in l>cloud" must not read as "icloud":
+        "hummelcloud.net",
+        "bigbullcloud.com",
+        "vercelcloud.com",
+        "app-x.loca-5823.vesselcloud.dev",
+        "voxelclouddao.xyz",
+        # "xiamei1" must not read as "ameli":
+        "nongminboboxiangxiamei1.com.cn",
+        "tiarneliu.com",
     ],
 )
 def test_benign_hostnames_are_not_alerts(scorer: Scorer, fqdn: str) -> None:
@@ -52,6 +61,10 @@ def test_benign_hostnames_are_not_alerts(scorer: Scorer, fqdn: str) -> None:
         "rnicrosoft-support.net",  # rn -> m
         "netflix.shop",  # TLD swap
         "ameli-remboursement.fr",
+        # Whole-word confusables must still be caught (live CT data):
+        "lcloud-localizado.info",  # i/l swap, whole label part
+        "lcloud-ubicacion-com.help",
+        "appleid-security.com",
     ],
 )
 def test_lookalikes_are_alerts(scorer: Scorer, fqdn: str) -> None:
