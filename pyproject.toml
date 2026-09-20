@@ -57,5 +57,5 @@ asyncio_mode = "auto"
 
 [tool.ruff.lint.per-file-ignores]
 # Confusable characters are the subject matter of these files.
-"src/lookalike_hunter/scoring/normalize.py" = ["RUF001", "RUF003"]
+"src/lookalike_hunter/scoring/normalize.py" = ["RUF001", "RUF002", "RUF003"]
 "tests/**" = ["RUF001", "RUF003"]
