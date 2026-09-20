@@ -44,6 +44,11 @@ def top_score(scorer: Scorer, fqdn: str, issuer: str | None = None) -> float:
         # "xiamei1" must not read as "ameli":
         "nongminboboxiangxiamei1.com.cn",
         "tiarneliu.com",
+        # rn -> m inside a longer word must not read as "ameli" either:
+        "ateliergamelle.com",
+        "thedarnells.org",
+        "thehouseofjameillajenell.com",
+        "jailynparnell.com",
     ],
 )
 def test_benign_hostnames_are_not_alerts(scorer: Scorer, fqdn: str) -> None:

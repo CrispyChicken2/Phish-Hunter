@@ -67,3 +67,21 @@ Match. Scores ≥ `store_floor` (0.4) are stored; ≥ `alert_threshold` (0.7) ar
 Every stored Match keeps its feature vector as JSON, so each score can be explained.
 
 Any value can be overridden via env, e.g. `LH_SCORING__ALERT_THRESHOLD=0.8`.
+
+Confusable collapsing comes in two levels. Rules that *create* letters (`i`/`l`,
+`rn` -> `m`) only apply to whole words, because searching them as substrings makes
+any word ending in `l` followed by `cloud` read as `icloud`. Unambiguous confusables
+(Cyrillic `а`, `1` -> `l`) are safe anywhere in a name.
+
+## Known limitations
+
+Names alone cannot settle every case; these are what the Day 2 vision model is for:
+
+- Legitimate domains that are genuine dnstwist variants, e.g. `livee.com` (a variant
+  of Microsoft's `live.com`) or `hicloud.net` (Huawei), score as known Variants.
+- Surnames and words that collide with short brand tokens, e.g. `amell.family`.
+- Brand-owned infrastructure that looks like combosquatting, e.g. `microsoft-falcon.net`.
+
+Operationally: about 2% of certificates are skipped when the local CT server outruns
+the consumer, and SIGTERM (as sent by `docker stop`) is not yet handled gracefully, so
+up to one flush interval of Matches can be lost. Ctrl+C is handled.
