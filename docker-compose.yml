@@ -6,3 +6,36 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:8080:8080"
+
+  # Visits suspicious sites. Everything here is damage limitation: the browser is
+  # the one component that runs attacker-controlled content.
+  capture:
+    build:
+      context: .
+      dockerfile: docker/capture/Dockerfile
+    profiles: ["tools"] # only runs on `docker compose run capture`
+    user: pwuser
+    security_opt:
+      - no-new-privileges:true
+      # Deliberate trade-off, measured on this image: Docker's default seccomp
+      # profile blocks the user namespaces Chromium's sandbox needs, so it is
+      # this filter or that sandbox. The renderer is where attacker code runs,
+      # and Chromium confines it with its own (stricter) seccomp filter, so we
+      # keep the browser sandbox. Everything else below stays locked down.
+      # A vendored chrome seccomp profile would give both; see README.
+      - seccomp=unconfined
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+    # A runaway page cannot exhaust the host.
+    mem_limit: 2g
+    pids_limit: 512
+    environment:
+      LH_DB_PATH: /app/data/lookalike.duckdb
+      LH_CAPTURE__OUTPUT_DIR: /app/data/captures
+    volumes:
+      # The only host path the browser container can reach.
+      - ./data:/app/data
+      - ./configs:/app/configs:ro

@@ -84,6 +84,10 @@ class BrowserCapturer:
         self._pw = await async_playwright().start()
         self._browser = await self._pw.chromium.launch(
             headless=True,
+            # Playwright disables Chromium's own sandbox by default. The renderer is
+            # the process that executes attacker-controlled content, so we keep it.
+            # In Docker this needs seccomp=unconfined (see docker-compose.yml).
+            chromium_sandbox=True,
             args=["--disable-background-networking", "--no-default-browser-check"],
         )
         return self
