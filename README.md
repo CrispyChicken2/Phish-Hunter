@@ -78,7 +78,9 @@ to every model on the account, so the model is chosen by name per request.
 Not every listed model is usable: on the free tier the `ministral-*` family answers
 normally (3b: 750 req/min, 8b: 188, 14b: 30) while `mistral-small`/`mistral-medium`
 return 429 with `x-ratelimit-limit-req-minute: 0` until pay-as-you-go is enabled.
-The default is `ministral-14b-latest`, the most capable free vision model. The `stub` backend classifies from DOM signals alone and is the
+The default is `ministral-14b-latest`, the most capable free vision model.
+
+The `stub` backend classifies from DOM signals alone, needs no key, and is the
 baseline the VLM is compared against on Day 3.
 
 ## Visiting hostile sites safely
@@ -136,5 +138,11 @@ Names alone cannot settle every case; these are what the Day 2 vision model is f
 - Brand-owned infrastructure that looks like combosquatting, e.g. `microsoft-falcon.net`.
 
 Operationally: about 2% of certificates are skipped when the local CT server outruns
-the consumer, and SIGTERM (as sent by `docker stop`) is not yet handled gracefully, so
-up to one flush interval of Matches can be lost. Ctrl+C is handled.
+the consumer. Ctrl+C and SIGTERM (as sent by `docker stop`) both flush buffered
+Matches before exiting.
+
+Security caveats that hardening does not remove: DNS rebinding can still defeat the
+private-address check, since Chromium resolves each host again after we do; the
+capture container has `./data` mounted read-write; captures are never pruned, so disk
+use grows without bound; and a page's own text reaches the classifier prompt, which is
+fenced and labelled as untrusted data but cannot be made injection-proof.
