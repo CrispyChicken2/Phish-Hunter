@@ -9,13 +9,25 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import duckdb
 
+from lookalike_hunter.capture.models import CaptureResult
 from lookalike_hunter.ingest.parse import Certificate
 from lookalike_hunter.scoring.scorer import Match
+
+
+@dataclass(frozen=True, slots=True)
+class PendingCapture:
+    """An Alert awaiting a passive visit."""
+
+    fqdn: str
+    registered_domain: str
+    brand: str
+    score: float
+
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS certificates (
@@ -39,6 +51,23 @@ CREATE TABLE IF NOT EXISTS matches (
     cert_sha256        VARCHAR NOT NULL,
     first_seen_at      TIMESTAMPTZ NOT NULL,
     PRIMARY KEY (fqdn, brand)
+);
+
+-- One row per passive visit. Re-captures of the same host are kept as history.
+CREATE SEQUENCE IF NOT EXISTS captures_id_seq;
+CREATE TABLE IF NOT EXISTS captures (
+    capture_id       BIGINT PRIMARY KEY DEFAULT nextval('captures_id_seq'),
+    fqdn             VARCHAR NOT NULL,
+    url              VARCHAR NOT NULL,
+    status           VARCHAR NOT NULL,
+    captured_at      TIMESTAMPTZ NOT NULL,
+    duration_ms      BIGINT NOT NULL,
+    final_url        VARCHAR,
+    http_status      INTEGER,
+    screenshot_path  VARCHAR,
+    html_path        VARCHAR,
+    signals          JSON,
+    error            VARCHAR
 );
 """
 
@@ -98,6 +127,56 @@ class MatchStore:
             inserted = self._count(con) - before
             con.commit()
         return inserted
+
+    def pending_captures(self, limit: int, recapture_after_h: float) -> list[PendingCapture]:
+        """Highest-scoring alerts not captured recently, one row per hostname.
+
+        Grouped by hostname because one host can alert for several brands; the
+        capture is of the site, not of the brand match.
+        """
+        with duckdb.connect(str(self.db_path), read_only=True) as con:
+            rows = con.execute(
+                """
+                SELECT m.fqdn, any_value(m.registered_domain), arg_max(m.brand, m.score),
+                       max(m.score)
+                FROM matches m
+                WHERE m.is_alert
+                  AND NOT EXISTS (
+                      SELECT 1 FROM captures c
+                      WHERE c.fqdn = m.fqdn
+                        AND c.captured_at > now() - INTERVAL (?) HOUR
+                  )
+                GROUP BY m.fqdn
+                ORDER BY max(m.score) DESC, min(m.first_seen_at) DESC
+                LIMIT ?
+                """,
+                [recapture_after_h, limit],
+            ).fetchall()
+        return [PendingCapture(f, d, b, float(s)) for f, d, b, s in rows]
+
+    def save_capture(self, result: CaptureResult) -> None:
+        with duckdb.connect(str(self.db_path)) as con:
+            con.execute(
+                """
+                INSERT INTO captures
+                    (fqdn, url, status, captured_at, duration_ms, final_url, http_status,
+                     screenshot_path, html_path, signals, error)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    result.fqdn,
+                    result.url,
+                    str(result.status),
+                    result.captured_at,
+                    result.duration_ms,
+                    result.final_url,
+                    result.http_status,
+                    str(result.screenshot_path) if result.screenshot_path else None,
+                    str(result.html_path) if result.html_path else None,
+                    json.dumps(asdict(result.signals)) if result.signals else None,
+                    result.error,
+                ],
+            )
 
     @staticmethod
     def _count(con: duckdb.DuckDBPyConnection) -> int:
