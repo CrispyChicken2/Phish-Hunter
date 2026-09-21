@@ -1,4 +1,4 @@
-"""Command-line entry point: ``lookalike-hunter {ingest,capture,alerts}``."""
+"""Command-line entry point: ``lookalike-hunter {ingest,capture,classify,models,alerts}``."""
 
 from __future__ import annotations
 
@@ -10,6 +10,9 @@ from pathlib import Path
 import duckdb
 
 from lookalike_hunter.capture.runner import run_captures
+from lookalike_hunter.classify.base import Classifier, StubClassifier
+from lookalike_hunter.classify.mistral import MistralClassifier, list_vision_models
+from lookalike_hunter.classify.runner import run_classifications
 from lookalike_hunter.config import Settings, load_settings
 from lookalike_hunter.ingest.pipeline import run_pipeline
 from lookalike_hunter.ingest.sources import CertSource, CertstreamSource, ReplaySource
@@ -57,6 +60,60 @@ def cmd_capture(settings: Settings, args: argparse.Namespace) -> None:
         log.info("capture.done_all", attempted=stats.attempted, succeeded=stats.succeeded)
 
 
+def _build_classifier(settings: Settings) -> tuple[Classifier, str | None]:
+    backend = settings.classify.backend
+    if backend == "stub":
+        return StubClassifier(), None
+    if backend == "mistral":
+        key = settings.mistral_api_key
+        if key is None:
+            raise SystemExit(
+                "MISTRAL_API_KEY is not set. Put it in .env or the environment, "
+                "or set classify.backend to 'stub'."
+            )
+        return (
+            MistralClassifier(
+                key.get_secret_value(),
+                settings.classify.model,
+                settings.classify.api_base,
+                settings.classify.timeout_s,
+            ),
+            settings.classify.model,
+        )
+    raise SystemExit(f"backend {backend!r} is not implemented yet")
+
+
+def cmd_classify(settings: Settings, args: argparse.Namespace) -> None:
+    store = MatchStore(settings.db_path, settings.scoring.alert_threshold)
+    classifier, model = _build_classifier(settings)
+    with contextlib.suppress(KeyboardInterrupt):
+        stats = asyncio.run(
+            run_classifications(
+                store,
+                classifier,
+                model,
+                args.limit or settings.classify.max_per_run,
+                settings.classify.max_retries,
+            )
+        )
+        log.info("classify.done_all", classified=stats.classified, failed=stats.failed)
+
+
+def cmd_models(settings: Settings, args: argparse.Namespace) -> None:
+    """List the vision models this Mistral account can call."""
+    key = settings.mistral_api_key
+    if key is None:
+        raise SystemExit("MISTRAL_API_KEY is not set (put it in .env).")
+    models = asyncio.run(list_vision_models(key.get_secret_value(), settings.classify.api_base))
+    if not models:
+        print("No vision-capable models available on this account.")
+        return
+    print("Vision models available to this account:")
+    for name in models:
+        marker = " <- configured" if name == settings.classify.model else ""
+        print(f"  {name}{marker}")
+
+
 def cmd_alerts(settings: Settings, args: argparse.Namespace) -> None:
     """Print the latest alerts, one registered domain per line."""
     with duckdb.connect(str(settings.db_path), read_only=True) as con:
@@ -88,6 +145,13 @@ def main(argv: list[str] | None = None) -> None:
     capture = sub.add_parser("capture", help="Passively visit alerts and store screenshots")
     capture.add_argument("--limit", type=int, default=None)
     capture.set_defaults(func=cmd_capture)
+
+    classify = sub.add_parser("classify", help="Classify stored captures with the VLM backend")
+    classify.add_argument("--limit", type=int, default=None)
+    classify.set_defaults(func=cmd_classify)
+
+    models = sub.add_parser("models", help="List vision models available to the API key")
+    models.set_defaults(func=cmd_models)
 
     alerts = sub.add_parser("alerts", help="List recent alerts grouped by registered domain")
     alerts.add_argument("--limit", type=int, default=30)

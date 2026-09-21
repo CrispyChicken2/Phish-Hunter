@@ -10,11 +10,14 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
+from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import duckdb
 
 from lookalike_hunter.capture.models import CaptureResult
+from lookalike_hunter.classify.schema import Verdict
 from lookalike_hunter.ingest.parse import Certificate
 from lookalike_hunter.scoring.scorer import Match
 
@@ -27,6 +30,19 @@ class PendingCapture:
     registered_domain: str
     brand: str
     score: float
+
+
+@dataclass(frozen=True, slots=True)
+class PendingClassification:
+    """A stored capture awaiting a verdict."""
+
+    capture_id: int
+    fqdn: str
+    status: str
+    suspected_brand: str
+    final_url: str | None = None
+    screenshot_path: Path | None = None
+    signals: dict[str, Any] | None = None
 
 
 SCHEMA = """
@@ -68,6 +84,25 @@ CREATE TABLE IF NOT EXISTS captures (
     html_path        VARCHAR,
     signals          JSON,
     error            VARCHAR
+);
+
+-- One verdict per capture and backend, so a re-run with another model is kept
+-- alongside the previous one for the Day 3 comparison.
+CREATE SEQUENCE IF NOT EXISTS verdicts_id_seq;
+CREATE TABLE IF NOT EXISTS verdicts (
+    verdict_id          BIGINT PRIMARY KEY DEFAULT nextval('verdicts_id_seq'),
+    capture_id          BIGINT NOT NULL,
+    fqdn                VARCHAR NOT NULL,
+    backend             VARCHAR NOT NULL,
+    model               VARCHAR,
+    label               VARCHAR NOT NULL,
+    confidence          DOUBLE NOT NULL,
+    brand_impersonated  VARCHAR,
+    evidence            VARCHAR,
+    classified_at       TIMESTAMPTZ NOT NULL,
+    latency_ms          BIGINT,
+    error               VARCHAR,
+    UNIQUE (capture_id, backend)
 );
 """
 
@@ -175,6 +210,72 @@ class MatchStore:
                     str(result.html_path) if result.html_path else None,
                     json.dumps(asdict(result.signals)) if result.signals else None,
                     result.error,
+                ],
+            )
+
+    def pending_classifications(self, limit: int, backend: str) -> list[PendingClassification]:
+        """Captures with no verdict yet from this backend, newest first."""
+        with duckdb.connect(str(self.db_path), read_only=True) as con:
+            rows = con.execute(
+                """
+                SELECT c.capture_id, c.fqdn, c.status, c.final_url, c.screenshot_path, c.signals,
+                       (SELECT arg_max(m.brand, m.score) FROM matches m WHERE m.fqdn = c.fqdn)
+                FROM captures c
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM verdicts v
+                    WHERE v.capture_id = c.capture_id AND v.backend = ?
+                )
+                ORDER BY c.captured_at DESC
+                LIMIT ?
+                """,
+                [backend, limit],
+            ).fetchall()
+        return [
+            PendingClassification(
+                capture_id=int(r[0]),
+                fqdn=r[1],
+                status=r[2],
+                final_url=r[3],
+                screenshot_path=Path(r[4]) if r[4] else None,
+                signals=json.loads(r[5]) if r[5] else None,
+                suspected_brand=r[6] or "unknown",
+            )
+            for r in rows
+        ]
+
+    def save_verdict(
+        self,
+        capture_id: int,
+        fqdn: str,
+        backend: str,
+        model: str | None,
+        verdict: Verdict | None,
+        classified_at: datetime,
+        latency_ms: int | None = None,
+        error: str | None = None,
+    ) -> None:
+        """Store a verdict, or a failure row so the capture is not retried forever."""
+        with duckdb.connect(str(self.db_path)) as con:
+            con.execute(
+                """
+                INSERT INTO verdicts
+                    (capture_id, fqdn, backend, model, label, confidence, brand_impersonated,
+                     evidence, classified_at, latency_ms, error)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT DO NOTHING
+                """,
+                [
+                    capture_id,
+                    fqdn,
+                    backend,
+                    model,
+                    str(verdict.label) if verdict else "error",
+                    verdict.confidence if verdict else 0.0,
+                    verdict.brand_impersonated if verdict else None,
+                    verdict.evidence if verdict else None,
+                    classified_at,
+                    latency_ms,
+                    error,
                 ],
             )
 
