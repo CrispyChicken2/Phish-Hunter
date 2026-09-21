@@ -105,4 +105,4 @@ def candidate_urls(fqdn: str) -> list[str]:
     is a one-way read of a hostile page, and we never send data to it. Refusing
     HTTP would simply blind the scanner to part of what it exists to find.
     """
-    return [f"https://{fqdn}/", f"http://{fqdn}/"]  # NOSONAR(S5332): read-only visit
+    return [f"https://{fqdn}/", f"http://{fqdn}/"]
