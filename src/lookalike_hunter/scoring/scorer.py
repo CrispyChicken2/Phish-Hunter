@@ -218,7 +218,11 @@ class Scorer:
             w.token_in_registered_label if f.token_in_registered_label else 0.0,
             w.token_in_subdomain if f.token_in_subdomain else 0.0,
         )
-        if base == 0.0:
+        # No base signal: the hostname is unrelated to this brand, and bonuses
+        # alone never create a Match. Compared with <= rather than == because
+        # exact equality on a float computed from configurable weights is
+        # fragile, and a negative weight should also mean "no signal".
+        if base <= 0.0:
             return 0.0
         bonus = (
             (w.homoglyph_bonus if f.homoglyph else 0.0)

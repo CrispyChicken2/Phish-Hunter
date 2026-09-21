@@ -116,3 +116,9 @@ def test_short_token_needs_whole_part() -> None:
 )
 def test_normalize_hostname(raw: str, expected: str | None) -> None:
     assert normalize_hostname(raw) == expected
+
+
+def test_no_base_signal_scores_zero_even_with_keywords(scorer: Scorer) -> None:
+    # "login" and "secure" are sensitive keywords, but nothing ties this host to
+    # a brand, so bonuses alone must not create a Match.
+    assert scorer.score("secure-login-portal.example") == []

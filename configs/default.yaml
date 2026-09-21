@@ -52,6 +52,8 @@ brands:
 
 capture:
   output_dir: data/captures
+  # ["https"] alone never fetches over cleartext, but misses HTTP-only kits.
+  schemes: [https, http]
   timeout_s: 15
   max_per_run: 20
   recapture_after_h: 24

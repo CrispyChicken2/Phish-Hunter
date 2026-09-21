@@ -51,6 +51,11 @@ class StubClassifier:
     name = "stub"
 
     async def classify(self, item: ClassificationInput) -> Verdict:
+        # The decision is pure computation, but the Classifier protocol is async
+        # because every real backend does I/O. Yielding once keeps this
+        # implementation a well-behaved coroutine: a long stub run hands control
+        # back to the event loop like a network backend would.
+        await asyncio.sleep(0)
         signals = item.signals
         if signals is None:
             return Verdict(

@@ -111,3 +111,16 @@ def test_non_hostname_strings_are_rejected(host: str) -> None:
 )
 def test_ipv6_literals(host: str, valid: bool) -> None:
     assert is_valid_hostname(host) is valid
+
+
+def test_candidate_urls_follow_the_configured_schemes() -> None:
+    assert candidate_urls("evil.test", ["https"]) == ["https://evil.test/"]
+    assert candidate_urls("evil.test", ["http", "https"]) == [
+        "http://evil.test/",
+        "https://evil.test/",
+    ]
+
+
+def test_candidate_urls_reject_unsupported_schemes() -> None:
+    with pytest.raises(ValueError, match="unsupported scheme"):
+        candidate_urls("evil.test", ["https", "file"])
