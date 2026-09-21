@@ -5,7 +5,7 @@ import pytest
 
 from lookalike_hunter.capture.models import CaptureResult, CaptureStatus
 from lookalike_hunter.capture.signals import PageSignals
-from lookalike_hunter.cli import install_shutdown_handler, main
+from lookalike_hunter.cli import install_shutdown_handler, main, safe_text
 from lookalike_hunter.ingest.store import MatchStore
 
 ROOT = Path(__file__).parents[1]
@@ -73,3 +73,10 @@ def test_sigterm_is_turned_into_keyboard_interrupt() -> None:
     assert callable(handler)
     with pytest.raises(KeyboardInterrupt):
         handler(signal.SIGTERM, None)
+
+
+def test_safe_text_strips_terminal_escapes() -> None:
+    hostile = "title\x1b[2J\x1b[31mPWNED\x07"
+    cleaned = safe_text(hostile)
+    assert "\x1b" not in cleaned and "\x07" not in cleaned
+    assert "PWNED" in cleaned  # content kept, control characters neutralised

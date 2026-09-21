@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
+import re
 import signal
 from pathlib import Path
 
@@ -23,6 +24,15 @@ from lookalike_hunter.scoring.scorer import Scorer
 from lookalike_hunter.variants.generator import VariantIndex
 
 log = get_logger(__name__)
+
+# Page titles, hostnames and model evidence are attacker-influenced text. Printing
+# them raw lets a crafted page drive the terminal with ANSI escape sequences.
+_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f-\x9f]")
+
+
+def safe_text(value: object, limit: int = 300) -> str:
+    """Strip control characters so hostile text cannot rewrite the terminal."""
+    return _CONTROL_CHARS.sub(" ", str(value))[:limit]
 
 
 def _build_source(settings: Settings, source: str, replay_path: Path | None) -> CertSource:
@@ -134,8 +144,10 @@ def cmd_alerts(settings: Settings, args: argparse.Namespace) -> None:
             [args.limit],
         ).fetchall()
     for domain, brand, score, n, first_seen, example in rows:
-        print(f"{first_seen:%Y-%m-%d %H:%M:%S}  {score:.2f}  {brand:<10} {domain:<40} "
-              f"{n:>4} host(s)  e.g. {example}")  # fmt: skip
+        print(
+            f"{first_seen:%Y-%m-%d %H:%M:%S}  {score:.2f}  {safe_text(brand, 10):<10} "
+            f"{safe_text(domain, 40):<40} {n:>4} host(s)  e.g. {safe_text(example, 60)}"
+        )
 
 
 def cmd_verdicts(settings: Settings, args: argparse.Namespace) -> None:
@@ -153,13 +165,16 @@ def cmd_verdicts(settings: Settings, args: argparse.Namespace) -> None:
             [args.label, args.label, args.limit],
         ).fetchall()
     for at, label, confidence, fqdn, brand, evidence, shot, backend in rows:
-        print(f"{at:%Y-%m-%d %H:%M}  {label:<12} {confidence:.2f}  {fqdn}  [{backend}]")
+        print(
+            f"{at:%Y-%m-%d %H:%M}  {safe_text(label, 12):<12} {confidence:.2f}  "
+            f"{safe_text(fqdn, 80)}  [{safe_text(backend, 20)}]"
+        )
         if brand:
-            print(f"    impersonates: {brand}")
+            print(f"    impersonates: {safe_text(brand, 60)}")
         if evidence:
-            print(f"    evidence: {evidence}")
+            print(f"    evidence: {safe_text(evidence)}")
         if shot:
-            print(f"    screenshot: {shot}")
+            print(f"    screenshot: {safe_text(shot, 200)}")
 
 
 def install_shutdown_handler() -> None:
