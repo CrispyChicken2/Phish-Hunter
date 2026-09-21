@@ -10,9 +10,13 @@ from __future__ import annotations
 
 import ipaddress
 import re
+from collections.abc import Sequence
 from urllib.parse import urlparse
 
 ALLOWED_SCHEMES = frozenset({"http", "https"})
+
+# Encrypted first; the cleartext retry is what catches kits served on port 80.
+DEFAULT_SCHEMES: tuple[str, ...] = ("https", "http")
 
 # A certificate SAN is attacker-controlled text, not necessarily a hostname. Left
 # unchecked, "evil.com@router.local" builds a URL whose real host is router.local
@@ -95,15 +99,17 @@ def is_valid_hostname(host: str) -> bool:
     return True
 
 
-def candidate_urls(fqdn: str) -> list[str]:
-    """URLs to try for a hostname: HTTPS first, then HTTP.
+def candidate_urls(fqdn: str, schemes: Sequence[str] = DEFAULT_SCHEMES) -> list[str]:
+    """URLs to try for a hostname, in order.
 
     The certificate proves HTTPS is configured, but phishing kits are often served
     over plain HTTP from the same host, so a failure on 443 is worth one retry.
-
-    The cleartext fallback is deliberate and carries no confidentiality risk: this
-    is a one-way read of a hostile page, and we never send data to it. Refusing
-    HTTP would simply blind the scanner to part of what it exists to find. See
-    .sonarcloud.properties for the corresponding analyser exception.
+    That cleartext attempt carries no confidentiality risk here: it is a one-way
+    read of a hostile page and we never send data to it. Operators who would
+    rather never touch cleartext can set ``capture.schemes`` to ``["https"]``,
+    accepting that HTTP-only kits then go unseen.
     """
-    return [f"https://{fqdn}/", f"http://{fqdn}/"]
+    unknown = [s for s in schemes if s not in ALLOWED_SCHEMES]
+    if unknown:
+        raise ValueError(f"unsupported scheme(s): {unknown}")
+    return [f"{scheme}://{fqdn}/" for scheme in schemes]

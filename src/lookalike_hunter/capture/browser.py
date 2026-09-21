@@ -171,7 +171,7 @@ class BrowserCapturer:
                 error=f"not a plain hostname: {fqdn[:100]!r}",
             )
         last: CaptureResult | None = None
-        for url in candidate_urls(fqdn):
+        for url in candidate_urls(fqdn, self.config.schemes):
             result = await self._capture_url(fqdn, url)
             if result.status is CaptureStatus.OK:
                 return result

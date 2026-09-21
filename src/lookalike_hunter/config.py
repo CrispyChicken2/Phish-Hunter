@@ -73,6 +73,9 @@ class CaptureConfig(BaseModel):
     """Passive visit of a suspicious site. Every default here is a safety decision."""
 
     output_dir: Path = Path("data/captures")
+    # Tried in order. Set to ["https"] to never fetch over cleartext, at the cost
+    # of missing phishing kits that are only served on port 80.
+    schemes: list[str] = Field(default_factory=lambda: ["https", "http"])
     timeout_s: float = 15.0
     # Time to let client-side phishing kits render after the network settles.
     settle_ms: int = 1500
