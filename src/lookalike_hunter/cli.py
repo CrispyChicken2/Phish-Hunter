@@ -1,4 +1,4 @@
-"""Command-line entry point: ``lookalike-hunter {ingest,alerts}``."""
+"""Command-line entry point: ``lookalike-hunter {ingest,capture,alerts}``."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from pathlib import Path
 
 import duckdb
 
+from lookalike_hunter.capture.runner import run_captures
 from lookalike_hunter.config import Settings, load_settings
 from lookalike_hunter.ingest.pipeline import run_pipeline
 from lookalike_hunter.ingest.sources import CertSource, CertstreamSource, ReplaySource
@@ -49,6 +50,13 @@ def cmd_ingest(settings: Settings, args: argparse.Namespace) -> None:
         log.info("ingest.done", **vars(stats))
 
 
+def cmd_capture(settings: Settings, args: argparse.Namespace) -> None:
+    store = MatchStore(settings.db_path, settings.scoring.alert_threshold)
+    with contextlib.suppress(KeyboardInterrupt):
+        stats = asyncio.run(run_captures(store, settings.capture, args.limit))
+        log.info("capture.done_all", attempted=stats.attempted, succeeded=stats.succeeded)
+
+
 def cmd_alerts(settings: Settings, args: argparse.Namespace) -> None:
     """Print the latest alerts, one registered domain per line."""
     with duckdb.connect(str(settings.db_path), read_only=True) as con:
@@ -76,6 +84,10 @@ def main(argv: list[str] | None = None) -> None:
     ingest.add_argument("--replay-path", type=Path, default=None)
     ingest.add_argument("--max-messages", type=int, default=None)
     ingest.set_defaults(func=cmd_ingest)
+
+    capture = sub.add_parser("capture", help="Passively visit alerts and store screenshots")
+    capture.add_argument("--limit", type=int, default=None)
+    capture.set_defaults(func=cmd_capture)
 
     alerts = sub.add_parser("alerts", help="List recent alerts grouped by registered domain")
     alerts.add_argument("--limit", type=int, default=30)
