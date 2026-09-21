@@ -1,4 +1,4 @@
-"""Command-line entry point: ``lookalike-hunter {ingest,capture,classify,models,alerts}``."""
+"""Command-line entry point for the lookalike-hunter commands."""
 
 from __future__ import annotations
 
@@ -131,6 +131,30 @@ def cmd_alerts(settings: Settings, args: argparse.Namespace) -> None:
               f"{n:>4} host(s)  e.g. {example}")  # fmt: skip
 
 
+def cmd_verdicts(settings: Settings, args: argparse.Namespace) -> None:
+    """Print the latest verdicts with the screenshot that backs each one."""
+    with duckdb.connect(str(settings.db_path), read_only=True) as con:
+        rows = con.execute(
+            """
+            SELECT v.classified_at, v.label, v.confidence, v.fqdn, v.brand_impersonated,
+                   v.evidence, c.screenshot_path, v.backend
+            FROM verdicts v JOIN captures c USING (capture_id)
+            WHERE (? IS NULL OR v.label = ?)
+            ORDER BY v.classified_at DESC, v.verdict_id DESC
+            LIMIT ?
+            """,
+            [args.label, args.label, args.limit],
+        ).fetchall()
+    for at, label, confidence, fqdn, brand, evidence, shot, backend in rows:
+        print(f"{at:%Y-%m-%d %H:%M}  {label:<12} {confidence:.2f}  {fqdn}  [{backend}]")
+        if brand:
+            print(f"    impersonates: {brand}")
+        if evidence:
+            print(f"    evidence: {evidence}")
+        if shot:
+            print(f"    screenshot: {shot}")
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="lookalike-hunter")
     parser.add_argument("--config", type=Path, default=None, help="YAML config path")
@@ -152,6 +176,11 @@ def main(argv: list[str] | None = None) -> None:
 
     models = sub.add_parser("models", help="List vision models available to the API key")
     models.set_defaults(func=cmd_models)
+
+    verdicts = sub.add_parser("verdicts", help="List recent verdicts with their evidence")
+    verdicts.add_argument("--limit", type=int, default=20)
+    verdicts.add_argument("--label", default=None, help="Only this label, e.g. phishing")
+    verdicts.set_defaults(func=cmd_verdicts)
 
     alerts = sub.add_parser("alerts", help="List recent alerts grouped by registered domain")
     alerts.add_argument("--limit", type=int, default=30)
