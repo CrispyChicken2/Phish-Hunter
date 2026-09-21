@@ -12,21 +12,34 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
+    env:
+      # Dependencies are installed without the project itself (see below), so the
+      # package is imported from the source tree.
+      PYTHONPATH: src
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      # Actions are pinned to a commit SHA: a tag can be moved to point at other
+      # code, a SHA cannot.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
         with:
           python-version: "3.12"
           enable-cache: true
-      - run: uv sync --locked
+
+      # --no-build refuses source distributions, so no dependency can run a setup
+      # script during install; --locked forbids resolving anything the lockfile
+      # does not already pin. Our own project is the one source tree that would
+      # need building, so it is not installed here: PYTHONPATH covers it instead.
+      - run: uv sync --locked --no-build --no-install-project
+
       - name: Install Chromium for capture tests
-        run: uv run playwright install --with-deps chromium
+        run: uv run --frozen --no-build --no-sync playwright install --with-deps chromium
       - name: Allow unprivileged user namespaces
         # Ubuntu 24.04 runners restrict them via AppArmor, which stops Chromium's
         # sandbox from starting. Lift it so CI exercises the production setting
         # (chromium_sandbox: true) instead of a weakened one.
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-      - run: uv run ruff check .
-      - run: uv run ruff format --check .
-      - run: uv run mypy src tests
-      - run: uv run pytest -q
+
+      - run: uv run --frozen --no-build --no-sync ruff check .
+      - run: uv run --frozen --no-build --no-sync ruff format --check .
+      - run: uv run --frozen --no-build --no-sync mypy src tests
+      - run: uv run --frozen --no-build --no-sync pytest -q

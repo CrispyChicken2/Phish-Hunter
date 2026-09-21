@@ -100,5 +100,9 @@ def candidate_urls(fqdn: str) -> list[str]:
 
     The certificate proves HTTPS is configured, but phishing kits are often served
     over plain HTTP from the same host, so a failure on 443 is worth one retry.
+
+    The cleartext fallback is deliberate and carries no confidentiality risk: this
+    is a one-way read of a hostile page, and we never send data to it. Refusing
+    HTTP would simply blind the scanner to part of what it exists to find.
     """
-    return [f"https://{fqdn}/", f"http://{fqdn}/"]
+    return [f"https://{fqdn}/", f"http://{fqdn}/"]  # NOSONAR(S5332): read-only visit
