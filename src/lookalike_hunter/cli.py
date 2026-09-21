@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
+import signal
 from pathlib import Path
 
 import duckdb
@@ -155,6 +156,25 @@ def cmd_verdicts(settings: Settings, args: argparse.Namespace) -> None:
             print(f"    screenshot: {shot}")
 
 
+def install_shutdown_handler() -> None:
+    """Turn SIGTERM into KeyboardInterrupt so buffered work is flushed.
+
+    ``docker stop`` and most supervisors send SIGTERM, whose default action kills
+    the process outright: the ingest pipeline would lose everything buffered since
+    the last flush. Ctrl+C already raises KeyboardInterrupt.
+    """
+
+    def handler(signum: int, frame: object) -> None:
+        log.info("shutdown.signal", signal=signal.Signals(signum).name)
+        raise KeyboardInterrupt
+
+    for name in ("SIGTERM", "SIGBREAK"):  # SIGBREAK is Windows-only
+        sig = getattr(signal, name, None)
+        if sig is not None:
+            with contextlib.suppress(ValueError, OSError):
+                signal.signal(sig, handler)
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="lookalike-hunter")
     parser.add_argument("--config", type=Path, default=None, help="YAML config path")
@@ -189,6 +209,7 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
     settings = load_settings(args.config)
     configure_logging(settings.log_level, settings.log_json)
+    install_shutdown_handler()
     args.func(settings, args)
 
 

@@ -5,7 +5,7 @@ import pytest
 
 from lookalike_hunter.capture.models import CaptureResult, CaptureStatus
 from lookalike_hunter.capture.signals import PageSignals
-from lookalike_hunter.cli import main
+from lookalike_hunter.cli import install_shutdown_handler, main
 from lookalike_hunter.ingest.store import MatchStore
 
 ROOT = Path(__file__).parents[1]
@@ -63,3 +63,13 @@ def test_classify_then_verdicts_output(
     assert "appleid-security.com" in out
     assert "phishing" in out
     assert "screenshot:" in out
+
+
+def test_sigterm_is_turned_into_keyboard_interrupt() -> None:
+    import signal
+
+    install_shutdown_handler()
+    handler = signal.getsignal(signal.SIGTERM)
+    assert callable(handler)
+    with pytest.raises(KeyboardInterrupt):
+        handler(signal.SIGTERM, None)
