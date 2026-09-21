@@ -2,29 +2,32 @@
 # the blast radius of a browser compromise is one throwaway container.
 FROM mcr.microsoft.com/playwright/python:v1.63.0-noble
 
+# Pinned: the image must build the same way tomorrow as today.
+COPY --from=ghcr.io/astral-sh/uv:0.11.21 /uv /usr/local/bin/uv
+
 ENV PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    HOME=/tmp
+    UV_LINK_MODE=copy \
+    UV_COMPILE_BYTECODE=1 \
+    HOME=/tmp \
+    PATH=/app/.venv/bin:$PATH
 
 WORKDIR /app
 
 # Optional: trust a TLS-intercepting proxy or antivirus root CA. The directory is
-# empty in a normal checkout, which makes this a no-op. pip pins its own CA bundle,
-# so point it at the system store once the extra root is installed.
-USER root
+# empty in a normal checkout, which makes this a no-op.
 COPY docker/local-ca/ /usr/local/share/ca-certificates/
 # update-ca-certificates only reads *.crt, so normalise whatever was dropped in.
 RUN for f in /usr/local/share/ca-certificates/*.pem; do \
         [ -e "$f" ] && mv -- "$f" "${f%.pem}.crt"; \
     done; \
     update-ca-certificates
-ENV PIP_CERT=/etc/ssl/certs/ca-certificates.crt     SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+    UV_NATIVE_TLS=true
 
-# Dependencies first: they change far less often than the source.
-COPY pyproject.toml README.md ./
+# Install from the lockfile: exact versions, same as CI and the developer machine.
+COPY pyproject.toml uv.lock README.md ./
 COPY src/ ./src/
-RUN pip install --no-cache-dir .
+RUN uv sync --locked --no-dev
 
 # pwuser ships with the Playwright image; never run the browser as root.
 USER pwuser

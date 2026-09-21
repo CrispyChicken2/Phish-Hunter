@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+# The workflow only reads the repository; deny everything else by default.
+permissions:
+  contents: read
+
 jobs:
   check:
     runs-on: ubuntu-latest

@@ -1,3 +1,9 @@
+networks:
+  # The browser runs hostile content; keep it off the network the other
+  # services share so a compromise cannot reach them.
+  ct:
+  capture:
+
 services:
   # Local Certificate Transparency aggregator exposing a certstream-compatible
   # websocket on ws://localhost:8080/ (the public calidog server is unreliable).
@@ -6,6 +12,7 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:8080:8080"
+    networks: [ct]
 
   # Visits suspicious sites. Everything here is damage limitation: the browser is
   # the one component that runs attacker-controlled content.
@@ -14,6 +21,7 @@ services:
       context: .
       dockerfile: docker/capture/Dockerfile
     profiles: ["tools"] # only runs on `docker compose run capture`
+    networks: [capture]
     user: pwuser
     security_opt:
       - no-new-privileges:true
