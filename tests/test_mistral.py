@@ -148,3 +148,18 @@ async def test_list_vision_models_keeps_only_vision_capable() -> None:
     }
     client = client_returning(httpx.Response(200, json=payload))
     assert await list_vision_models("key", client=client) == ["pixtral-12b-2409"]
+
+
+async def test_rate_limit_error_reports_the_quota_headers(screenshot: Path) -> None:
+    response = httpx.Response(
+        429,
+        text='{"message":"Rate limit exceeded"}',
+        headers={"x-ratelimit-limit-req-minute": "0", "Retry-After": "7"},
+    )
+    classifier = MistralClassifier("key", "m", client=client_returning(response))
+
+    with pytest.raises(ClassificationError) as excinfo:
+        await classifier.classify(make_item(screenshot))
+
+    assert "x-ratelimit-limit-req-minute" in str(excinfo.value)
+    assert excinfo.value.retry_after_s == 7.0

@@ -138,8 +138,12 @@ class MistralClassifier:
         # Auth and request-shape problems will not fix themselves on a retry;
         # rate limits and server errors will.
         retryable = response.status_code == 429 or response.status_code >= 500
+        # A 429 whose limit is 0 is an account problem, not a burst: surface the
+        # quota headers so the cause is visible without a separate debug script.
+        quota = {k: v for k, v in response.headers.items() if k.lower().startswith("x-ratelimit")}
+        detail = f" quota={quota}" if quota else ""
         raise ClassificationError(
-            f"API returned {response.status_code}: {body}",
+            f"API returned {response.status_code}: {body}{detail}",
             retryable=retryable,
             retry_after_s=_retry_after(response),
         )
