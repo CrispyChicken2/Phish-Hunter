@@ -72,9 +72,13 @@ echo "MISTRAL_API_KEY=..." > .env
 uv run lookalike-hunter models          # what this key can actually call
 ```
 
-then set `classify.backend: mistral` and `classify.model` in `configs/default.yaml`.
-One key gives access to every model on the account, so the model is chosen by name
-per request. The `stub` backend classifies from DOM signals alone and is the
+then set `classify.backend: mistral` in `configs/default.yaml`. One key gives access
+to every model on the account, so the model is chosen by name per request.
+
+Not every listed model is usable: on the free tier the `ministral-*` family answers
+normally (3b: 750 req/min, 8b: 188, 14b: 30) while `mistral-small`/`mistral-medium`
+return 429 with `x-ratelimit-limit-req-minute: 0` until pay-as-you-go is enabled.
+The default is `ministral-14b-latest`, the most capable free vision model. The `stub` backend classifies from DOM signals alone and is the
 baseline the VLM is compared against on Day 3.
 
 ## Visiting hostile sites safely
