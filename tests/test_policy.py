@@ -1,6 +1,11 @@
 import pytest
 
-from lookalike_hunter.capture.policy import candidate_urls, is_blocked_url, is_private_address
+from lookalike_hunter.capture.policy import (
+    candidate_urls,
+    is_blocked_url,
+    is_private_address,
+    is_valid_hostname,
+)
 
 
 @pytest.mark.parametrize(
@@ -64,3 +69,45 @@ def test_private_blocking_can_be_disabled() -> None:
 
 def test_candidate_urls_prefer_https() -> None:
     assert candidate_urls("evil.test") == ["https://evil.test/", "http://evil.test/"]
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "example.com",
+        "sub.example.co.uk",
+        "xn--pypal-4ve.com",
+        "host-with-dash.io",
+        "trailing.dot.",
+        "127.0.0.1:8080",  # a port is fine: the host part is still validated
+        "example.com:443",
+    ],
+)
+def test_plain_hostnames_are_accepted(host: str) -> None:
+    assert is_valid_hostname(host)
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "evil.com@router.local",  # userinfo: the real host is router.local
+        "evil.com@127.0.0.1",
+        "evil.com/../x",  # path traversal
+        "ev il.com",  # space
+        "evil.com#frag",
+        "evil.com:notaport",
+        "evil.com:8080:9090",
+        "évil.com",  # must arrive punycoded
+        "",
+    ],
+)
+def test_non_hostname_strings_are_rejected(host: str) -> None:
+    assert not is_valid_hostname(host)
+
+
+@pytest.mark.parametrize(
+    ("host", "valid"),
+    [("[::1]", True), ("[::1]:8080", True), ("[::1", False), ("[notanip]", False)],
+)
+def test_ipv6_literals(host: str, valid: bool) -> None:
+    assert is_valid_hostname(host) is valid

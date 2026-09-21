@@ -121,3 +121,14 @@ async def test_capture_reports_dns_failure_without_crashing(tmp_path: Path) -> N
 
     assert result.status is CaptureStatus.DNS_ERROR
     assert result.error
+
+
+@needs_chromium
+async def test_capture_refuses_a_san_that_is_not_a_hostname(tmp_path: Path) -> None:
+    """A certificate SAN is attacker text: 'evil.com@host' would visit 'host'."""
+    config = CaptureConfig(output_dir=tmp_path, timeout_s=10)
+    async with BrowserCapturer(config) as capturer:
+        result = await capturer.capture("evil.com@example.com")
+
+    assert result.status is CaptureStatus.BLOCKED
+    assert result.error is not None and "not a plain hostname" in result.error

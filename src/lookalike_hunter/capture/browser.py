@@ -32,7 +32,12 @@ from playwright.async_api import (
 )
 
 from lookalike_hunter.capture.models import CaptureResult, CaptureStatus
-from lookalike_hunter.capture.policy import candidate_urls, is_blocked_url, is_private_address
+from lookalike_hunter.capture.policy import (
+    candidate_urls,
+    is_blocked_url,
+    is_private_address,
+    is_valid_hostname,
+)
 from lookalike_hunter.capture.signals import extract_signals
 from lookalike_hunter.config import CaptureConfig
 from lookalike_hunter.logging import get_logger
@@ -144,6 +149,9 @@ class BrowserCapturer:
             },
             ignore_https_errors=self.config.ignore_https_errors,
             accept_downloads=False,
+            # Service worker requests are not reliably seen by our route filter,
+            # so a page could fetch through one; refuse registration entirely.
+            service_workers="block",
             user_agent=self.config.user_agent,
             java_script_enabled=True,
         )
@@ -153,6 +161,15 @@ class BrowserCapturer:
 
     async def capture(self, fqdn: str) -> CaptureResult:
         """Visit ``fqdn`` (HTTPS, then HTTP) and return what was observed."""
+        if not is_valid_hostname(fqdn):
+            return CaptureResult(
+                fqdn,
+                fqdn,
+                CaptureStatus.BLOCKED,
+                datetime.now(UTC),
+                0,
+                error=f"not a plain hostname: {fqdn[:100]!r}",
+            )
         last: CaptureResult | None = None
         for url in candidate_urls(fqdn):
             result = await self._capture_url(fqdn, url)
