@@ -17,9 +17,13 @@ log = get_logger(__name__)
 class ClassificationError(Exception):
     """The backend could not produce a usable verdict for this attempt."""
 
-    def __init__(self, message: str, *, retryable: bool = True) -> None:
+    def __init__(
+        self, message: str, *, retryable: bool = True, retry_after_s: float | None = None
+    ) -> None:
         super().__init__(message)
         self.retryable = retryable
+        # Honoured over our own backoff when the API says how long to wait.
+        self.retry_after_s = retry_after_s
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,7 +99,7 @@ async def classify_with_retries(
         except ClassificationError as exc:
             if not exc.retryable or attempt >= max_retries:
                 raise
-            delay = base_delay_s * 2 ** (attempt - 1)
+            delay = exc.retry_after_s or base_delay_s * 2 ** (attempt - 1)
             log.warning(
                 "classify.retry",
                 backend=classifier.name,

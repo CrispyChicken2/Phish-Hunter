@@ -59,5 +59,7 @@ capture:
 classify:
   # stub | mistral | ollama. The API key comes from MISTRAL_API_KEY / .env, never here.
   backend: stub
-  model: pixtral-12b-2409
+  model: mistral-small-latest
   max_retries: 3
+  min_interval_s: 2
+  retry_base_delay_s: 3

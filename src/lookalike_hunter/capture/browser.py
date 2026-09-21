@@ -233,7 +233,9 @@ class BrowserCapturer:
             duration_ms=duration_ms,
             final_url=final_url,
             http_status=getattr(response, "status", None),
-            screenshot_path=screenshot_path,
-            html_path=html_path,
+            # Stored relative to output_dir: captures are written inside a container
+            # and read from the host, where /app/data does not exist.
+            screenshot_path=screenshot_path.relative_to(self.config.output_dir),
+            html_path=html_path.relative_to(self.config.output_dir),
             signals=extract_signals(html, final_url),
         )

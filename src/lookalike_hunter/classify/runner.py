@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 
 from lookalike_hunter.capture.signals import PageSignals
 from lookalike_hunter.classify.base import (
@@ -27,6 +29,7 @@ class ClassifyRunStats:
     failed: int = 0
     by_label: Counter[str] = field(default_factory=Counter)
     total_latency_ms: int = 0
+    model_calls: int = 0
 
     @property
     def classified(self) -> int:
@@ -40,7 +43,15 @@ def _signals_from_row(row: PendingClassification) -> PageSignals | None:
     return PageSignals(**{k: v for k, v in row.signals.items() if k in known})
 
 
-def _offline_verdict(row: PendingClassification) -> Verdict | None:
+def resolve_screenshot(row: PendingClassification, captures_dir: Path) -> Path | None:
+    """Stored paths are relative to the capture directory (see BrowserCapturer)."""
+    if row.screenshot_path is None:
+        return None
+    path = row.screenshot_path
+    return path if path.is_absolute() else captures_dir / path
+
+
+def _offline_verdict(row: PendingClassification, screenshot: Path | None) -> Verdict | None:
     """Verdicts that need no model: an unreachable site, or a missing screenshot."""
     if row.status != "ok":
         return Verdict(
@@ -48,7 +59,7 @@ def _offline_verdict(row: PendingClassification) -> Verdict | None:
             confidence=1.0,
             evidence=f"Capture failed with status {row.status}.",
         )
-    if row.screenshot_path is None or not row.screenshot_path.exists():
+    if screenshot is None or not screenshot.exists():
         return Verdict(
             label=Label.UNKNOWN,
             confidence=0.0,
@@ -63,6 +74,9 @@ async def run_classifications(
     model: str | None,
     limit: int,
     max_retries: int,
+    captures_dir: Path = Path("data/captures"),
+    min_interval_s: float = 0.0,
+    retry_base_delay_s: float = 1.0,
 ) -> ClassifyRunStats:
     pending = store.pending_classifications(limit, classifier.name)
     stats = ClassifyRunStats()
@@ -74,23 +88,28 @@ async def run_classifications(
     for row in pending:
         stats.attempted += 1
         now = datetime.now(UTC)
-        offline = _offline_verdict(row)
+        screenshot = resolve_screenshot(row, captures_dir)
+        offline = _offline_verdict(row, screenshot)
         if offline is not None:
             store.save_verdict(row.capture_id, row.fqdn, classifier.name, model, offline, now)
             stats.by_label[str(offline.label)] += 1
             continue
 
-        assert row.screenshot_path is not None
+        assert screenshot is not None
         item = ClassificationInput(
             fqdn=row.fqdn,
             suspected_brand=row.suspected_brand,
-            screenshot_path=row.screenshot_path,
+            screenshot_path=screenshot,
             final_url=row.final_url,
             signals=_signals_from_row(row),
         )
+        # Space out calls: a free tier rejects bursts, and a 429 costs a retry.
+        if min_interval_s and stats.model_calls:
+            await asyncio.sleep(min_interval_s)
+        stats.model_calls += 1
         started = time.perf_counter()
         try:
-            verdict = await classify_with_retries(classifier, item, max_retries)
+            verdict = await classify_with_retries(classifier, item, max_retries, retry_base_delay_s)
         except ClassificationError as exc:
             latency = int((time.perf_counter() - started) * 1000)
             stats.failed += 1

@@ -7,10 +7,12 @@ request by name, so :func:`list_vision_models` reports what is actually callable
 from __future__ import annotations
 
 import base64
+import ssl
 from pathlib import Path
 from typing import Any
 
 import httpx
+import truststore
 
 from lookalike_hunter.classify.base import ClassificationError, ClassificationInput
 from lookalike_hunter.classify.schema import (
@@ -26,6 +28,27 @@ log = get_logger(__name__)
 # Screenshots are the whole point of the capture, but a full-page shot of a long
 # site is megabytes; Mistral rejects oversized payloads.
 MAX_IMAGE_BYTES = 8_000_000
+
+
+def default_ssl_context() -> ssl.SSLContext:
+    """Verify TLS against the OS certificate store rather than a bundled one.
+
+    httpx ships its own CA bundle, which does not contain the roots an enterprise
+    proxy or a TLS-scanning antivirus injects into the system store. Those hosts
+    would fail every API call with CERTIFICATE_VERIFY_FAILED.
+    """
+    return truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+
+
+def _retry_after(response: httpx.Response) -> float | None:
+    """Seconds the API asked us to wait, when it says so (429 responses)."""
+    raw = response.headers.get("Retry-After") or response.headers.get("retry-after")
+    if raw is None:
+        return None
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        return None  # HTTP-date form: fall back to our own backoff
 
 
 def encode_image(path: Path) -> str:
@@ -52,7 +75,7 @@ class MistralClassifier:
         self.api_base = api_base.rstrip("/")
         self._timeout = timeout_s
         self._owns_client = client is None
-        self._client = client or httpx.AsyncClient(timeout=timeout_s)
+        self._client = client or httpx.AsyncClient(timeout=timeout_s, verify=default_ssl_context())
         self._headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
@@ -116,7 +139,9 @@ class MistralClassifier:
         # rate limits and server errors will.
         retryable = response.status_code == 429 or response.status_code >= 500
         raise ClassificationError(
-            f"API returned {response.status_code}: {body}", retryable=retryable
+            f"API returned {response.status_code}: {body}",
+            retryable=retryable,
+            retry_after_s=_retry_after(response),
         )
 
 
@@ -127,7 +152,7 @@ async def list_vision_models(
 ) -> list[str]:
     """Model ids on this account that accept images, sorted by id."""
     owned = client is None
-    client = client or httpx.AsyncClient(timeout=30)
+    client = client or httpx.AsyncClient(timeout=30, verify=default_ssl_context())
     try:
         response = await client.get(
             f"{api_base.rstrip('/')}/models",

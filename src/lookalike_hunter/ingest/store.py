@@ -279,6 +279,15 @@ class MatchStore:
                 ],
             )
 
+    def clear_failed_verdicts(self, backend: str) -> int:
+        """Drop error rows so their captures are classified again."""
+        with duckdb.connect(str(self.db_path)) as con:
+            before = con.execute("SELECT count(*) FROM verdicts").fetchone()
+            con.execute("DELETE FROM verdicts WHERE backend = ? AND label = 'error'", [backend])
+            after = con.execute("SELECT count(*) FROM verdicts").fetchone()
+        assert before is not None and after is not None
+        return int(before[0]) - int(after[0])
+
     @staticmethod
     def _count(con: duckdb.DuckDBPyConnection) -> int:
         row = con.execute("SELECT count(*) FROM matches").fetchone()

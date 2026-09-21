@@ -12,6 +12,7 @@ from lookalike_hunter.classify.schema import Label, Verdict
 from lookalike_hunter.ingest.store import MatchStore
 
 NOW = datetime(2026, 9, 21, 10, 0, tzinfo=UTC)
+FAKE_PNG = bytes.fromhex("89504e470d0a1a0a") + b"fake"
 
 
 def store_with_capture(
@@ -24,7 +25,7 @@ def store_with_capture(
     shot: Path | None = None
     if with_screenshot:
         shot = tmp_path / "shot.png"
-        shot.write_bytes(b"\x89PNG-fake")
+        shot.write_bytes(FAKE_PNG)
     store.save_capture(
         CaptureResult(
             fqdn="appleid-security.com",
@@ -80,6 +81,29 @@ async def test_unreachable_capture_is_labelled_without_calling_the_model(tmp_pat
 
     assert stats.by_label[str(Label.UNREACHABLE)] == 1
     assert verdict_rows(store)[0][1] == "unreachable"
+
+
+async def test_relative_screenshot_path_is_resolved_against_captures_dir(tmp_path: Path) -> None:
+    """A capture written inside the container is read back on the host."""
+    store = MatchStore(tmp_path / "t.duckdb", 0.7)
+    captures = tmp_path / "captures"
+    (captures / "site.com").mkdir(parents=True)
+    (captures / "site.com" / "shot.png").write_bytes(FAKE_PNG)
+    store.save_capture(
+        CaptureResult(
+            fqdn="site.com",
+            url="https://site.com/",
+            status=CaptureStatus.OK,
+            captured_at=NOW,
+            duration_ms=10,
+            screenshot_path=Path("site.com/shot.png"),
+            signals=PageSignals(title="Sign in", form_count=1, has_password_input=True),
+        )
+    )
+
+    await run_classifications(store, StubClassifier(), None, 10, 2, captures_dir=captures)
+
+    assert verdict_rows(store)[0][1] == "phishing"  # not "unknown": the file was found
 
 
 async def test_missing_screenshot_is_unknown(tmp_path: Path) -> None:

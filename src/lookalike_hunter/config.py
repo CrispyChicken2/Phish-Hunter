@@ -93,13 +93,18 @@ class CaptureConfig(BaseModel):
 
 class ClassifyConfig(BaseModel):
     backend: Literal["stub", "mistral", "ollama"] = "stub"
-    model: str = "pixtral-12b-2409"
+    # Pixtral is no longer served by the API; the medium/small family is the
+    # current multimodal line. `lookalike-hunter models` lists what a key can call.
+    model: str = "mistral-small-latest"
     api_base: str = "https://api.mistral.ai/v1"
     ollama_base: str = "http://localhost:11434"
     timeout_s: float = 90.0
     max_retries: int = 3
     max_html_chars: int = 4000
     max_per_run: int = 20
+    # Free API tiers rate-limit aggressively; pace calls instead of burning retries.
+    min_interval_s: float = 2.0
+    retry_base_delay_s: float = 3.0
 
 
 class Settings(BaseSettings):

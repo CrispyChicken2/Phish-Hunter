@@ -100,14 +100,17 @@ async def test_capture_collects_screenshot_html_and_signals(tmp_path: Path, fake
 
     assert result.status is CaptureStatus.OK
     assert result.http_status == 200
-    assert result.screenshot_path is not None and result.screenshot_path.stat().st_size > 1000
-    assert result.html_path is not None
+    # Paths are stored relative to output_dir so a capture made in a container
+    # can be read from the host.
+    assert result.screenshot_path is not None and not result.screenshot_path.is_absolute()
+    assert result.html_path is not None and not result.html_path.is_absolute()
+    assert (tmp_path / result.screenshot_path).stat().st_size > 1000
     assert result.signals is not None
     assert result.signals.title == "Apple ID - Sign in"
     assert result.signals.has_login_form
     assert result.signals.cross_domain_form_targets == ["example.net"]
     # JavaScript must run: kits render their fake login client-side.
-    assert 'data-rendered="yes"' in result.html_path.read_text(encoding="utf-8")
+    assert 'data-rendered="yes"' in (tmp_path / result.html_path).read_text(encoding="utf-8")
 
 
 @needs_chromium

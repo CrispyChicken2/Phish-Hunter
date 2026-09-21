@@ -87,6 +87,9 @@ def _build_classifier(settings: Settings) -> tuple[Classifier, str | None]:
 def cmd_classify(settings: Settings, args: argparse.Namespace) -> None:
     store = MatchStore(settings.db_path, settings.scoring.alert_threshold)
     classifier, model = _build_classifier(settings)
+    if args.retry_failed:
+        cleared = store.clear_failed_verdicts(classifier.name)
+        log.info("classify.retry_failed", cleared=cleared)
     with contextlib.suppress(KeyboardInterrupt):
         stats = asyncio.run(
             run_classifications(
@@ -95,6 +98,9 @@ def cmd_classify(settings: Settings, args: argparse.Namespace) -> None:
                 model,
                 args.limit or settings.classify.max_per_run,
                 settings.classify.max_retries,
+                settings.capture.output_dir,
+                settings.classify.min_interval_s,
+                settings.classify.retry_base_delay_s,
             )
         )
         log.info("classify.done_all", classified=stats.classified, failed=stats.failed)
@@ -192,6 +198,9 @@ def main(argv: list[str] | None = None) -> None:
 
     classify = sub.add_parser("classify", help="Classify stored captures with the VLM backend")
     classify.add_argument("--limit", type=int, default=None)
+    classify.add_argument(
+        "--retry-failed", action="store_true", help="Re-classify captures that errored"
+    )
     classify.set_defaults(func=cmd_classify)
 
     models = sub.add_parser("models", help="List vision models available to the API key")
