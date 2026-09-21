@@ -49,3 +49,15 @@ brands:
     tokens: [ameli]
     official_domains: [ameli.fr]
     negative_tokens: [amelia, cameli, pamela]
+
+capture:
+  output_dir: data/captures
+  timeout_s: 15
+  max_per_run: 20
+  recapture_after_h: 24
+
+classify:
+  # stub | mistral | ollama. The API key comes from MISTRAL_API_KEY / .env, never here.
+  backend: stub
+  model: pixtral-12b-2409
+  max_retries: 3

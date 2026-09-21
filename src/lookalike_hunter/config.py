@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import AliasChoices, BaseModel, Field, SecretStr, model_validator
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -69,15 +69,60 @@ class VariantsConfig(BaseModel):
     swap_tlds: list[str] = Field(default_factory=list)
 
 
-class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="LH_", env_nested_delimiter="__")
+class CaptureConfig(BaseModel):
+    """Passive visit of a suspicious site. Every default here is a safety decision."""
 
+    output_dir: Path = Path("data/captures")
+    timeout_s: float = 15.0
+    # Time to let client-side phishing kits render after the network settles.
+    settle_ms: int = 1500
+    viewport_width: int = 1280
+    viewport_height: int = 800
+    full_page_screenshot: bool = True
+    max_html_bytes: int = 2_000_000
+    # Suspicious sites routinely have broken or self-signed certificates; refusing
+    # them would hide exactly what we want to look at. We never send data there.
+    ignore_https_errors: bool = True
+    # A redirect must not be able to reach the LAN, the router or cloud metadata.
+    block_private_networks: bool = True
+    user_agent: str | None = None
+    max_per_run: int = 20
+    # Re-capture a domain only after this many hours.
+    recapture_after_h: float = 24.0
+
+
+class ClassifyConfig(BaseModel):
+    backend: Literal["stub", "mistral", "ollama"] = "stub"
+    model: str = "pixtral-12b-2409"
+    api_base: str = "https://api.mistral.ai/v1"
+    ollama_base: str = "http://localhost:11434"
+    timeout_s: float = 90.0
+    max_retries: int = 3
+    max_html_chars: int = 4000
+    max_per_run: int = 20
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="LH_",
+        env_nested_delimiter="__",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    # Secret: environment or .env only, never the YAML config (which is committed).
+    mistral_api_key: SecretStr | None = Field(
+        default=None, validation_alias=AliasChoices("MISTRAL_API_KEY", "LH_MISTRAL_API_KEY")
+    )
     db_path: Path = Path("data/lookalike.duckdb")
     log_level: str = "INFO"
     log_json: bool = True
     ct: CTConfig = Field(default_factory=CTConfig)
     scoring: ScoringConfig = Field(default_factory=ScoringConfig)
     variants: VariantsConfig = Field(default_factory=VariantsConfig)
+    capture: CaptureConfig = Field(default_factory=CaptureConfig)
+    classify: ClassifyConfig = Field(default_factory=ClassifyConfig)
     brands: list[BrandConfig] = Field(default_factory=list)
 
     @classmethod
@@ -93,6 +138,7 @@ class Settings(BaseSettings):
         return (
             init_settings,
             env_settings,
+            dotenv_settings,  # .env holds secrets such as MISTRAL_API_KEY
             YamlConfigSettingsSource(settings_cls, yaml_file=yaml_path),
         )
 
