@@ -17,6 +17,11 @@ jobs:
       - run: uv sync --locked
       - name: Install Chromium for capture tests
         run: uv run playwright install --with-deps chromium
+      - name: Allow unprivileged user namespaces
+        # Ubuntu 24.04 runners restrict them via AppArmor, which stops Chromium's
+        # sandbox from starting. Lift it so CI exercises the production setting
+        # (chromium_sandbox: true) instead of a weakened one.
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run mypy src tests

@@ -86,6 +86,11 @@ class CaptureConfig(BaseModel):
     # A redirect must not be able to reach the LAN, the router or cloud metadata.
     block_private_networks: bool = True
     user_agent: str | None = None
+    # Chromium's own sandbox confines the renderer, the process that runs the
+    # page's code. It needs unprivileged user namespaces, which some hosts
+    # restrict (Docker's default seccomp, Ubuntu's AppArmor); turn it off only
+    # where the container is the only boundary you can get.
+    chromium_sandbox: bool = True
     max_per_run: int = 20
     # Re-capture a domain only after this many hours.
     recapture_after_h: float = 24.0
