@@ -4,9 +4,14 @@ Detect brand-impersonating domains (typosquatting, homoglyphs, combosquatting) f
 Certificate Transparency logs as soon as their certificate is issued, then triage them
 with a vision-language model. **Defensive use only.**
 
-> Status: Day 1 of 4 — ingestion, variant generation and scoring. Capture, VLM
-> classification, evaluation and the dashboard follow. See `CONTEXT.md` for the
-> domain vocabulary (Candidate, Match, Alert, Variant…).
+> Status: Day 2 of 4 — ingestion, scoring, passive capture and VLM classification.
+> Evaluation and the dashboard follow. See `CONTEXT.md` for the domain vocabulary
+> (Candidate, Match, Alert, Verdict…).
+
+```
+CT logs ──► scoring ──► Alerts ──► headless capture ──► VLM ──► Verdicts
+            (names)               (screenshot + DOM)   (vision)
+```
 
 ## Quick start
 
@@ -48,6 +53,50 @@ services:
     volumes:
       - ./docker/local-ca:/local-ca:ro
 ```
+
+### Capture and classify
+
+```bash
+# Visit pending alerts from the hardened container and store screenshots.
+docker compose run --rm capture capture --limit 10
+
+# Turn captures into verdicts (stub backend needs no API key).
+uv run lookalike-hunter classify
+uv run lookalike-hunter verdicts --label phishing
+```
+
+To use a real vision model, put your key in `.env` (never in the YAML):
+
+```bash
+echo "MISTRAL_API_KEY=..." > .env
+uv run lookalike-hunter models          # what this key can actually call
+```
+
+then set `classify.backend: mistral` and `classify.model` in `configs/default.yaml`.
+One key gives access to every model on the account, so the model is chosen by name
+per request. The `stub` backend classifies from DOM signals alone and is the
+baseline the VLM is compared against on Day 3.
+
+## Visiting hostile sites safely
+
+The browser is the only component that runs attacker-controlled content, so it is
+treated as expendable:
+
+| Layer | Measure |
+|---|---|
+| Container | Separate image, non-root `pwuser`, all capabilities dropped, `no-new-privileges`, read-only root filesystem + tmpfs, 2 GB memory and 512 PID caps, only `./data` mounted |
+| Browser | Chromium sandbox **enabled** (Playwright disables it by default), fresh context per site, 15 s timeout, downloads refused, dialogs auto-dismissed |
+| Behaviour | Never fills a form, never submits credentials, never follows links: load, screenshot, read the DOM, leave |
+| Network | Non-`http(s)` schemes refused; every request's host is resolved and blocked if it is loopback, private, link-local or cloud metadata, so a redirect cannot make our browser probe your LAN |
+
+Docker's default seccomp profile blocks the user namespaces Chromium's sandbox
+needs, so the compose service sets `seccomp=unconfined`: it is one filter or the
+other. The renderer executes the attacker's content and Chromium confines it with
+a stricter, purpose-built filter, so the browser sandbox wins. Vendoring a Chrome
+seccomp profile would give both and is the right follow-up.
+
+**What this does not hide:** the site owner sees your IP address and knows someone
+looked. Use a VPN if that matters.
 
 ## How scoring works
 
