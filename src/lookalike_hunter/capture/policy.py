@@ -103,6 +103,7 @@ def candidate_urls(fqdn: str) -> list[str]:
 
     The cleartext fallback is deliberate and carries no confidentiality risk: this
     is a one-way read of a hostile page, and we never send data to it. Refusing
-    HTTP would simply blind the scanner to part of what it exists to find.
+    HTTP would simply blind the scanner to part of what it exists to find. See
+    .sonarcloud.properties for the corresponding analyser exception.
     """
     return [f"https://{fqdn}/", f"http://{fqdn}/"]
