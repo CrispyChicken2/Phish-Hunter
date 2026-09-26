@@ -14,6 +14,14 @@ from lookalike_hunter.classify.base import Classifier, StubClassifier
 from lookalike_hunter.classify.mistral import MistralClassifier, list_vision_models
 from lookalike_hunter.classify.runner import run_classifications
 from lookalike_hunter.config import Settings, load_settings
+from lookalike_hunter.eval.build import (
+    candidates_from_alerts,
+    candidates_from_feed,
+    fetch_feed,
+    hard_negative_candidates,
+    write_candidates,
+)
+from lookalike_hunter.eval.feeds import OPENPHISH_FEED_URL
 from lookalike_hunter.eval.report import write_report
 from lookalike_hunter.eval.runner import ARM_SCORING_ONLY, run_evaluation
 from lookalike_hunter.ingest.pipeline import run_pipeline
@@ -150,6 +158,32 @@ def cmd_alerts(settings: Settings, args: argparse.Namespace) -> None:
         )
 
 
+def cmd_dataset(settings: Settings, args: argparse.Namespace) -> None:
+    """Collect candidate sites for a human to label. Assigns no ground truth."""
+    candidates = []
+    if args.feed_file is not None:
+        text = args.feed_file.read_text(encoding="utf-8", errors="replace")
+        candidates += candidates_from_feed(text, settings.brands, source=args.feed_file.name)
+    elif args.fetch_feed:
+        log.info("dataset.fetching", url=args.feed_url)
+        candidates += candidates_from_feed(
+            fetch_feed(args.feed_url), settings.brands, source="openphish"
+        )
+    if args.from_alerts:
+        candidates += candidates_from_alerts(settings.db_path, args.from_alerts)
+    if args.hard_negatives:
+        candidates += hard_negative_candidates()
+
+    if not candidates:
+        raise SystemExit(
+            "nothing to add: pass --fetch-feed, --feed-file, --from-alerts or --hard-negatives"
+        )
+
+    added, skipped = write_candidates(args.out, candidates)
+    print(f"{added} candidate(s) added to {args.out} ({skipped} already present)")
+    print('Now set "expected" on each new line: see docs/labelling-protocol.md')
+
+
 def cmd_evaluate(settings: Settings, args: argparse.Namespace) -> None:
     """Measure the pipeline against a labelled dataset and write a report."""
     index = VariantIndex.from_brands(settings.brands, settings.variants.swap_tlds)
@@ -242,6 +276,15 @@ def main(argv: list[str] | None = None) -> None:
 
     models = sub.add_parser("models", help="List vision models available to the API key")
     models.set_defaults(func=cmd_models)
+
+    dataset = sub.add_parser("dataset", help="Collect candidate sites to label")
+    dataset.add_argument("--out", type=Path, default=Path("datasets/eval.jsonl"))
+    dataset.add_argument("--fetch-feed", action="store_true", help="Download the phishing feed")
+    dataset.add_argument("--feed-url", default=OPENPHISH_FEED_URL)
+    dataset.add_argument("--feed-file", type=Path, default=None, help="Use a local feed copy")
+    dataset.add_argument("--from-alerts", type=int, default=0, help="Sample N captured alerts")
+    dataset.add_argument("--hard-negatives", action="store_true", help="Seed known tricky cases")
+    dataset.set_defaults(func=cmd_dataset)
 
     evaluate = sub.add_parser("evaluate", help="Measure accuracy against a labelled dataset")
     evaluate.add_argument("--dataset", type=Path, required=True, help="Labelled dataset (JSONL)")

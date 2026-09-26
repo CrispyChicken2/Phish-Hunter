@@ -1,0 +1,13 @@
+# Recorded sample in the OpenPhish free-feed format (one URL per line).
+# Hostnames are invented; the shapes are the ones the real feed contains.
+https://paypal-account-verify.example-phish.com/signin
+http://secure-login-portal.example-phish.net/paypal/verify
+https://appleid-locked.example-phish.org/unlock
+https://netflix-billing-update.example-phish.com/payment
+http://192.0.2.44/microsoft/office365/login
+https://unrelated-crypto-drainer.example-phish.com/claim
+https://amazon.example-phish.co/order/confirm
+not-a-url-at-all
+ftp://files.example-phish.com/paypal.zip
+https://
+https://paypal-account-verify.example-phish.com/another-path
