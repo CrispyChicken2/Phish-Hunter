@@ -116,3 +116,20 @@ def test_save_capture_persists_signals_and_errors(tmp_path: Path) -> None:
         ).fetchall()
     assert rows[0][1] == "dns_error" and rows[0][3] == "getaddrinfo ENOTFOUND"
     assert json.loads(rows[1][2])["has_password_input"] is True
+
+
+def test_uncaptured_returns_sites_needing_a_screenshot(tmp_path: Path) -> None:
+    """Dataset entries that never alerted still need capturing."""
+    store = MatchStore(tmp_path / "t.duckdb", 0.7)
+    store.save_capture(capture("fresh.com", when=datetime.now(UTC)))
+    store.save_capture(capture("stale.com", when=datetime.now(UTC) - timedelta(hours=48)))
+
+    todo = store.uncaptured(
+        ["never-seen.github.io", "fresh.com", "stale.com"], recapture_after_h=24
+    )
+
+    assert todo == ["never-seen.github.io", "stale.com"]  # order preserved, fresh skipped
+
+
+def test_uncaptured_with_no_input(tmp_path: Path) -> None:
+    assert MatchStore(tmp_path / "t.duckdb", 0.7).uncaptured([], 24) == []

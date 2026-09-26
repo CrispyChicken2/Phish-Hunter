@@ -249,6 +249,26 @@ class MatchStore:
             ).fetchall()
         return [PendingCapture(f, d, b, float(s)) for f, d, b, s in rows]
 
+    def uncaptured(self, fqdns: Sequence[str], recapture_after_h: float) -> list[str]:
+        """Of these hostnames, the ones with no recent Capture, order preserved.
+
+        Used to capture dataset entries that never alerted: a site hosted on
+        github.io or S3 carries no brand lookalike, so it never reaches the
+        matches table, yet it still needs a screenshot to be labelled.
+        """
+        if not fqdns:
+            return []
+        with connect_with_retry(self.db_path, read_only=True) as con:
+            rows = con.execute(
+                """
+                SELECT DISTINCT fqdn FROM captures
+                WHERE fqdn IN (SELECT unnest(?)) AND captured_at > now() - INTERVAL (?) HOUR
+                """,
+                [list(fqdns), recapture_after_h],
+            ).fetchall()
+        recent = {row[0] for row in rows}
+        return [fqdn for fqdn in fqdns if fqdn not in recent]
+
     def save_capture(self, result: CaptureResult) -> None:
         with connect_with_retry(self.db_path) as con:
             con.execute(

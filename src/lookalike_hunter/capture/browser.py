@@ -11,6 +11,7 @@ import asyncio
 import contextlib
 import re
 import socket
+from dataclasses import replace
 from datetime import UTC, datetime
 from types import TracebackType
 from urllib.parse import urlparse
@@ -170,15 +171,20 @@ class BrowserCapturer:
                 0,
                 error=f"not a plain hostname: {fqdn[:100]!r}",
             )
-        last: CaptureResult | None = None
+        attempts: list[CaptureResult] = []
         for url in candidate_urls(fqdn, self.config.schemes):
             result = await self._capture_url(fqdn, url)
             if result.status is CaptureStatus.OK:
                 return result
-            last = result
+            attempts.append(result)
             if result.status is CaptureStatus.DNS_ERROR:
-                break  # the name does not resolve: HTTP will not help
-        assert last is not None
+                break  # the name does not resolve: another scheme will not help
+        # Report every scheme that was tried. Keeping only the last one hid why
+        # HTTPS failed behind the HTTP fallback's error, which made triage guesswork.
+        last = attempts[-1]
+        if len(attempts) > 1:
+            detail = " | ".join(f"{a.url}: {a.error or a.status}" for a in attempts)
+            last = replace(last, error=detail[:500])
         return last
 
     async def _capture_url(self, fqdn: str, url: str) -> CaptureResult:

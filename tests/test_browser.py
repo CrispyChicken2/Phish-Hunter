@@ -132,3 +132,15 @@ async def test_capture_refuses_a_san_that_is_not_a_hostname(tmp_path: Path) -> N
 
     assert result.status is CaptureStatus.BLOCKED
     assert result.error is not None and "not a plain hostname" in result.error
+
+
+@needs_chromium
+async def test_failure_reports_every_scheme_tried(tmp_path: Path) -> None:
+    """The HTTPS error must not be hidden behind the HTTP fallback's error."""
+    config = CaptureConfig(output_dir=tmp_path, timeout_s=8)
+    async with BrowserCapturer(config) as capturer:
+        result = await capturer.capture("this-host-does-not-exist-lh.invalid")
+
+    assert result.error is not None
+    # DNS failures stop after the first scheme, so only one attempt is reported.
+    assert "https://" in result.error
