@@ -8,7 +8,8 @@ dashboard, notebooks) can open the file between flushes.
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+import time
+from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
@@ -19,7 +20,66 @@ import duckdb
 from lookalike_hunter.capture.models import CaptureResult
 from lookalike_hunter.classify.schema import Verdict
 from lookalike_hunter.ingest.parse import Certificate
+from lookalike_hunter.logging import get_logger
 from lookalike_hunter.scoring.scorer import Match
+
+log = get_logger(__name__)
+
+# DuckDB allows one writer per file. Collection runs capture while ingestion is
+# flushing, so a collision is routine rather than exceptional: measured at 9 of 11
+# capture cycles. The loser of the race waits and retries instead of failing.
+#
+# Contention is detected by exclusion, not by matching the message: the operating
+# system localises it (a French Windows says "le processus ne peut pas acceder au
+# fichier car ce fichier est utilise par un autre processus", a Linux container says
+# "Permission denied"), so a positive-match list silently stops working depending on
+# the machine. Only failures that retrying cannot possibly fix are re-raised at once.
+_PERMANENT_MARKERS = (
+    "corrupt",
+    "not a valid",
+    "unsupported",
+    "no such file",
+    "read-only",
+    "out of memory",
+)
+
+
+class LockContentionError(RuntimeError):
+    """The database stayed locked by another process for the whole retry budget."""
+
+
+def _is_permanent(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return any(marker in message for marker in _PERMANENT_MARKERS)
+
+
+def connect_with_retry(
+    db_path: Path,
+    *,
+    read_only: bool = False,
+    attempts: int = 6,
+    base_delay_s: float = 0.25,
+    connect: Callable[..., Any] = duckdb.connect,
+) -> Any:
+    """Open the database, waiting out a writer held by another process.
+
+    Only lock contention is retried; a corrupt or unreadable file fails immediately,
+    because retrying that would just hide the real problem.
+    """
+    for attempt in range(1, attempts + 1):
+        try:
+            return connect(str(db_path), read_only=read_only)
+        except duckdb.IOException as exc:
+            if _is_permanent(exc):
+                raise
+            if attempt == attempts:
+                raise LockContentionError(
+                    f"{db_path} stayed locked by another process after {attempts} attempts: {exc}"
+                ) from exc
+            delay = base_delay_s * 2 ** (attempt - 1)
+            log.debug("store.lock_retry", db=str(db_path), attempt=attempt, retry_in_s=delay)
+            time.sleep(delay)
+    raise AssertionError("unreachable")
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,7 +172,7 @@ class MatchStore:
         self.db_path = db_path
         self.alert_threshold = alert_threshold
         db_path.parent.mkdir(parents=True, exist_ok=True)
-        with duckdb.connect(str(db_path)) as con:
+        with connect_with_retry(db_path) as con:
             con.execute(SCHEMA)
 
     def write(self, rows: Sequence[tuple[Certificate, Match]]) -> int:
@@ -125,7 +185,7 @@ class MatchStore:
             unique.setdefault((m.fqdn, m.brand), (c, m))
         rows = list(unique.values())
         certs = {c.sha256: c for c, _ in rows}
-        with duckdb.connect(str(self.db_path)) as con:
+        with connect_with_retry(self.db_path) as con:
             con.begin()
             con.executemany(
                 "INSERT INTO certificates VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
@@ -169,7 +229,7 @@ class MatchStore:
         Grouped by hostname because one host can alert for several brands; the
         capture is of the site, not of the brand match.
         """
-        with duckdb.connect(str(self.db_path), read_only=True) as con:
+        with connect_with_retry(self.db_path, read_only=True) as con:
             rows = con.execute(
                 """
                 SELECT m.fqdn, any_value(m.registered_domain), arg_max(m.brand, m.score),
@@ -190,7 +250,7 @@ class MatchStore:
         return [PendingCapture(f, d, b, float(s)) for f, d, b, s in rows]
 
     def save_capture(self, result: CaptureResult) -> None:
-        with duckdb.connect(str(self.db_path)) as con:
+        with connect_with_retry(self.db_path) as con:
             con.execute(
                 """
                 INSERT INTO captures
@@ -215,7 +275,7 @@ class MatchStore:
 
     def pending_classifications(self, limit: int, backend: str) -> list[PendingClassification]:
         """Captures with no verdict yet from this backend, newest first."""
-        with duckdb.connect(str(self.db_path), read_only=True) as con:
+        with connect_with_retry(self.db_path, read_only=True) as con:
             rows = con.execute(
                 """
                 SELECT c.capture_id, c.fqdn, c.status, c.final_url, c.screenshot_path, c.signals,
@@ -255,7 +315,7 @@ class MatchStore:
         error: str | None = None,
     ) -> None:
         """Store a verdict, or a failure row so the capture is not retried forever."""
-        with duckdb.connect(str(self.db_path)) as con:
+        with connect_with_retry(self.db_path) as con:
             con.execute(
                 """
                 INSERT INTO verdicts
@@ -281,7 +341,7 @@ class MatchStore:
 
     def clear_failed_verdicts(self, backend: str) -> int:
         """Drop error rows so their captures are classified again."""
-        with duckdb.connect(str(self.db_path)) as con:
+        with connect_with_retry(self.db_path) as con:
             before = con.execute("SELECT count(*) FROM verdicts").fetchone()
             con.execute("DELETE FROM verdicts WHERE backend = ? AND label = 'error'", [backend])
             after = con.execute("SELECT count(*) FROM verdicts").fetchone()

@@ -5,10 +5,12 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field
 
+import duckdb
+
 from lookalike_hunter.capture.browser import BrowserCapturer
 from lookalike_hunter.capture.models import CaptureStatus
 from lookalike_hunter.config import CaptureConfig
-from lookalike_hunter.ingest.store import MatchStore
+from lookalike_hunter.ingest.store import LockContentionError, MatchStore
 from lookalike_hunter.logging import get_logger
 
 log = get_logger(__name__)
@@ -17,6 +19,7 @@ log = get_logger(__name__)
 @dataclass
 class CaptureRunStats:
     attempted: int = 0
+    save_failures: int = 0
     by_status: Counter[str] = field(default_factory=Counter)
 
     @property
@@ -42,9 +45,16 @@ async def run_captures(
     async with BrowserCapturer(config) as capturer:
         for target in pending:
             result = await capturer.capture(target.fqdn)
-            store.save_capture(result)
             stats.attempted += 1
             stats.by_status[str(result.status)] += 1
+            try:
+                store.save_capture(result)
+            except (LockContentionError, duckdb.Error) as exc:
+                # The screenshot is already on disk; losing the row is bad but it
+                # must not cost us the rest of the batch.
+                stats.save_failures += 1
+                log.error("capture.save_failed", fqdn=target.fqdn, error=str(exc)[:300])
+                continue
             log.info(
                 "capture.done",
                 fqdn=target.fqdn,
@@ -57,5 +67,10 @@ async def run_captures(
                 duration_ms=result.duration_ms,
                 error=result.error,
             )
-    log.info("capture.finished", attempted=stats.attempted, **dict(stats.by_status))
+    log.info(
+        "capture.finished",
+        attempted=stats.attempted,
+        save_failures=stats.save_failures,
+        **dict(stats.by_status),
+    )
     return stats
