@@ -21,12 +21,13 @@ from lookalike_hunter.eval.build import (
     hard_negative_candidates,
     write_candidates,
 )
+from lookalike_hunter.eval.dataset import iter_dataset
 from lookalike_hunter.eval.feeds import OPENPHISH_FEED_URL
 from lookalike_hunter.eval.report import write_report
 from lookalike_hunter.eval.runner import ARM_SCORING_ONLY, run_evaluation
 from lookalike_hunter.ingest.pipeline import run_pipeline
 from lookalike_hunter.ingest.sources import CertSource, CertstreamSource, ReplaySource
-from lookalike_hunter.ingest.store import MatchStore, connect_with_retry
+from lookalike_hunter.ingest.store import MatchStore, PendingCapture, connect_with_retry
 from lookalike_hunter.logging import configure_logging, get_logger
 from lookalike_hunter.scoring.scorer import Scorer
 from lookalike_hunter.variants.generator import VariantIndex
@@ -72,10 +73,28 @@ def cmd_ingest(settings: Settings, args: argparse.Namespace) -> None:
         log.info("ingest.done", **vars(stats))
 
 
+def _dataset_targets(
+    store: MatchStore, dataset_path: Path, limit: int | None, recapture_after_h: float
+) -> list[PendingCapture]:
+    """Dataset entries still needing a screenshot, labelled or not."""
+    sites = {s.fqdn: s for s in iter_dataset(dataset_path, allow_unlabelled=True)}
+    todo = store.uncaptured(list(sites), recapture_after_h)[: limit or len(sites)]
+    return [
+        PendingCapture(fqdn=fqdn, registered_domain=fqdn, brand=sites[fqdn].brand or "", score=0.0)
+        for fqdn in todo
+    ]
+
+
 def cmd_capture(settings: Settings, args: argparse.Namespace) -> None:
     store = MatchStore(settings.db_path, settings.scoring.alert_threshold)
+    targets = None
+    if args.from_dataset is not None:
+        targets = _dataset_targets(
+            store, args.from_dataset, args.limit, settings.capture.recapture_after_h
+        )
+        log.info("capture.from_dataset", dataset=str(args.from_dataset), targets=len(targets))
     with contextlib.suppress(KeyboardInterrupt):
-        stats = asyncio.run(run_captures(store, settings.capture, args.limit))
+        stats = asyncio.run(run_captures(store, settings.capture, args.limit, targets))
         log.info("capture.done_all", attempted=stats.attempted, succeeded=stats.succeeded)
 
 
@@ -265,6 +284,12 @@ def main(argv: list[str] | None = None) -> None:
 
     capture = sub.add_parser("capture", help="Passively visit alerts and store screenshots")
     capture.add_argument("--limit", type=int, default=None)
+    capture.add_argument(
+        "--from-dataset",
+        type=Path,
+        default=None,
+        help="Capture the sites in a dataset file instead of pending alerts",
+    )
     capture.set_defaults(func=cmd_capture)
 
     classify = sub.add_parser("classify", help="Classify stored captures with the VLM backend")

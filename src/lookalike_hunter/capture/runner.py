@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 import duckdb
@@ -10,7 +11,7 @@ import duckdb
 from lookalike_hunter.capture.browser import BrowserCapturer
 from lookalike_hunter.capture.models import CaptureStatus
 from lookalike_hunter.config import CaptureConfig
-from lookalike_hunter.ingest.store import LockContentionError, MatchStore
+from lookalike_hunter.ingest.store import LockContentionError, MatchStore, PendingCapture
 from lookalike_hunter.logging import get_logger
 
 log = get_logger(__name__)
@@ -28,14 +29,21 @@ class CaptureRunStats:
 
 
 async def run_captures(
-    store: MatchStore, config: CaptureConfig, limit: int | None = None
+    store: MatchStore,
+    config: CaptureConfig,
+    limit: int | None = None,
+    targets: Sequence[PendingCapture] | None = None,
 ) -> CaptureRunStats:
     """Capture pending alerts sequentially.
 
     Sequential on purpose: these are hostile sites, and one browser context at a
     time keeps resource use predictable and the logs readable.
     """
-    pending = store.pending_captures(limit or config.max_per_run, config.recapture_after_h)
+    pending = (
+        list(targets)
+        if targets is not None
+        else store.pending_captures(limit or config.max_per_run, config.recapture_after_h)
+    )
     stats = CaptureRunStats()
     if not pending:
         log.info("capture.nothing_pending")

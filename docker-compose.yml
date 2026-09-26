@@ -47,3 +47,5 @@ services:
       # The only host path the browser container can reach.
       - ./data:/app/data
       - ./configs:/app/configs:ro
+      # Ground truth, read-only: the browser container must never edit labels.
+      - ./datasets:/app/datasets:ro
