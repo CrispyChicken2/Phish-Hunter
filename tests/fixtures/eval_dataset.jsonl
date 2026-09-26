@@ -1,0 +1,10 @@
+# Fixture dataset. Labels are stipulated for testing, not claims about real sites.
+# Chosen so the scoring-only confusion matrix is known and checkable by hand.
+{"fqdn": "paypa1-secure-login.com", "expected": "phishing", "brand": "paypal", "source": "fixture", "labelled_at": "2026-09-27", "note": "digit homoglyph plus keywords"}
+{"fqdn": "xn--pypal-4ve.com", "expected": "phishing", "brand": "paypal", "source": "fixture", "labelled_at": "2026-09-27", "note": "IDN homoglyph"}
+{"fqdn": "apple-verify-fixture.com", "expected": "phishing", "brand": "apple", "source": "fixture", "labelled_at": "2026-09-27", "note": "combosquat"}
+{"fqdn": "generic-account-alert.com", "expected": "phishing", "brand": null, "source": "fixture", "labelled_at": "2026-09-27", "note": "phishing with no brand token: the scorer cannot see it"}
+{"fqdn": "quiet-bakery-fixture.com", "expected": "legitimate", "brand": null, "source": "fixture", "labelled_at": "2026-09-27", "note": "unrelated business"}
+{"fqdn": "hummelcloud.net", "expected": "legitimate", "brand": null, "source": "fixture", "labelled_at": "2026-09-27", "note": "regression: must not read as icloud"}
+{"fqdn": "paypal-login-fixture.com", "expected": "legitimate", "brand": "paypal", "source": "fixture", "labelled_at": "2026-09-27", "note": "brand-shaped name, stipulated legitimate: a false positive for the scorer"}
+{"fqdn": "lcloud-verify.live", "expected": "parked", "brand": "apple", "source": "fixture", "labelled_at": "2026-09-27", "note": "the scorer cannot predict parked at all"}

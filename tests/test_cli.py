@@ -80,3 +80,22 @@ def test_safe_text_strips_terminal_escapes() -> None:
     cleaned = safe_text(hostile)
     assert "\x1b" not in cleaned and "\x07" not in cleaned
     assert "PWNED" in cleaned  # content kept, control characters neutralised
+
+
+def test_evaluate_command_writes_a_report(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    dataset = ROOT / "tests" / "fixtures" / "eval_dataset.jsonl"
+
+    main(
+        [
+            "--config", str(ROOT / "configs" / "default.yaml"),
+            "evaluate", "--dataset", str(dataset), "--out", str(tmp_path),
+        ]
+    )  # fmt: skip
+
+    out = capsys.readouterr().out
+    assert "scoring_only: accuracy 62.50%" in out
+    assert "report:" in out
+    assert list(tmp_path.glob("*/report.md")), "a markdown report should exist"
+    assert list(tmp_path.glob("*/report.json")), "a json report should exist"
