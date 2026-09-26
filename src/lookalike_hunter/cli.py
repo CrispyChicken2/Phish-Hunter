@@ -9,16 +9,16 @@ import re
 import signal
 from pathlib import Path
 
-import duckdb
-
 from lookalike_hunter.capture.runner import run_captures
 from lookalike_hunter.classify.base import Classifier, StubClassifier
 from lookalike_hunter.classify.mistral import MistralClassifier, list_vision_models
 from lookalike_hunter.classify.runner import run_classifications
 from lookalike_hunter.config import Settings, load_settings
+from lookalike_hunter.eval.report import write_report
+from lookalike_hunter.eval.runner import ARM_SCORING_ONLY, run_evaluation
 from lookalike_hunter.ingest.pipeline import run_pipeline
 from lookalike_hunter.ingest.sources import CertSource, CertstreamSource, ReplaySource
-from lookalike_hunter.ingest.store import MatchStore
+from lookalike_hunter.ingest.store import MatchStore, connect_with_retry
 from lookalike_hunter.logging import configure_logging, get_logger
 from lookalike_hunter.scoring.scorer import Scorer
 from lookalike_hunter.variants.generator import VariantIndex
@@ -133,7 +133,7 @@ def cmd_models(settings: Settings, args: argparse.Namespace) -> None:
 
 def cmd_alerts(settings: Settings, args: argparse.Namespace) -> None:
     """Print the latest alerts, one registered domain per line."""
-    with duckdb.connect(str(settings.db_path), read_only=True) as con:
+    with connect_with_retry(settings.db_path, read_only=True) as con:
         rows = con.execute(
             """
             SELECT registered_domain, brand, max(score) AS score, count(*) AS hostnames,
@@ -150,9 +150,31 @@ def cmd_alerts(settings: Settings, args: argparse.Namespace) -> None:
         )
 
 
+def cmd_evaluate(settings: Settings, args: argparse.Namespace) -> None:
+    """Measure the pipeline against a labelled dataset and write a report."""
+    index = VariantIndex.from_brands(settings.brands, settings.variants.swap_tlds)
+    scorer = Scorer(settings.brands, settings.scoring, index)
+    report = run_evaluation(
+        args.dataset, scorer, settings.scoring.alert_threshold, arms=tuple(args.arms)
+    )
+    json_path, markdown_path = write_report(report, args.out)
+
+    for arm in report.arms.values():
+        m = arm.metrics
+        print(f"{arm.name}: accuracy {m.accuracy:.2%} ({m.correct}/{m.total}), "
+              f"macro F1 {m.macro_f1:.4f}, {len(arm.mistakes)} mistake(s)")  # fmt: skip
+        for cls in m.per_class.values():
+            print(
+                f"    {safe_text(cls.label, 12):<12} "
+                f"P {cls.precision:.4f}  R {cls.recall:.4f}  F1 {cls.f1:.4f}  "
+                f"(support {cls.support})"
+            )
+    print(f"\nreport: {markdown_path}\n        {json_path}")
+
+
 def cmd_verdicts(settings: Settings, args: argparse.Namespace) -> None:
     """Print the latest verdicts with the screenshot that backs each one."""
-    with duckdb.connect(str(settings.db_path), read_only=True) as con:
+    with connect_with_retry(settings.db_path, read_only=True) as con:
         rows = con.execute(
             """
             SELECT v.classified_at, v.label, v.confidence, v.fqdn, v.brand_impersonated,
@@ -220,6 +242,12 @@ def main(argv: list[str] | None = None) -> None:
 
     models = sub.add_parser("models", help="List vision models available to the API key")
     models.set_defaults(func=cmd_models)
+
+    evaluate = sub.add_parser("evaluate", help="Measure accuracy against a labelled dataset")
+    evaluate.add_argument("--dataset", type=Path, required=True, help="Labelled dataset (JSONL)")
+    evaluate.add_argument("--out", type=Path, default=Path("data/eval"))
+    evaluate.add_argument("--arms", nargs="+", default=[ARM_SCORING_ONLY])
+    evaluate.set_defaults(func=cmd_evaluate)
 
     verdicts = sub.add_parser("verdicts", help="List recent verdicts with their evidence")
     verdicts.add_argument("--limit", type=int, default=20)

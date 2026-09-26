@@ -1,0 +1,91 @@
+"""The labelled dataset the evaluation measures against.
+
+One JSON object per line. JSON Lines rather than CSV because a label change shows
+up as a one-line diff in review, and because notes and hostnames contain commas,
+quotes and non-ASCII characters that CSV handles badly.
+
+Ground truth lives here and nowhere else. A feed's own label is recorded in
+``source`` as provenance: trusting it would make the phishing class circular,
+measuring agreement with the feed rather than accuracy.
+"""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Iterator
+from dataclasses import dataclass
+from datetime import date
+from pathlib import Path
+
+from lookalike_hunter.classify.schema import Label
+
+
+class DatasetError(ValueError):
+    """A dataset file that cannot be trusted to mean what it says."""
+
+
+@dataclass(frozen=True, slots=True)
+class LabelledSite:
+    fqdn: str
+    expected: Label
+    source: str
+    labelled_at: date
+    brand: str | None = None
+    note: str | None = None
+
+
+def _parse_line(raw: str, path: Path, line_number: int) -> LabelledSite:
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise DatasetError(f"{path}:{line_number}: not valid JSON: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise DatasetError(f"{path}:{line_number}: expected a JSON object")
+
+    missing = {"fqdn", "expected", "source", "labelled_at"} - payload.keys()
+    if missing:
+        raise DatasetError(f"{path}:{line_number}: missing field(s) {sorted(missing)}")
+
+    try:
+        expected = Label(payload["expected"])
+    except ValueError as exc:
+        raise DatasetError(
+            f"{path}:{line_number}: unknown label {payload['expected']!r}; "
+            f"expected one of {[label.value for label in Label]}"
+        ) from exc
+    try:
+        labelled_at = date.fromisoformat(str(payload["labelled_at"]))
+    except ValueError as exc:
+        raise DatasetError(f"{path}:{line_number}: labelled_at must be an ISO date: {exc}") from exc
+
+    return LabelledSite(
+        fqdn=str(payload["fqdn"]).strip().lower(),
+        expected=expected,
+        source=str(payload["source"]),
+        labelled_at=labelled_at,
+        brand=payload.get("brand"),
+        note=payload.get("note"),
+    )
+
+
+def iter_dataset(path: Path) -> Iterator[LabelledSite]:
+    """Yield each labelled site, naming the offending line when one is malformed."""
+    with path.open(encoding="utf-8") as handle:
+        for line_number, raw in enumerate(handle, start=1):
+            if raw.strip() and not raw.lstrip().startswith("#"):
+                yield _parse_line(raw, path, line_number)
+
+
+def load_dataset(path: Path) -> list[LabelledSite]:
+    """Load the dataset, rejecting duplicates so one site cannot be counted twice."""
+    sites = list(iter_dataset(path))
+    seen: dict[str, int] = {}
+    for position, site in enumerate(sites, start=1):
+        if site.fqdn in seen:
+            raise DatasetError(
+                f"{path}: {site.fqdn} appears twice (entries {seen[site.fqdn]} and {position})"
+            )
+        seen[site.fqdn] = position
+    if not sites:
+        raise DatasetError(f"{path}: dataset is empty")
+    return sites
