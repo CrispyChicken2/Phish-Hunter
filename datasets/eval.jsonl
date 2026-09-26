@@ -1,0 +1,72 @@
+# Candidate sites for evaluation. Set "expected" on every line;
+# see docs/labelling-protocol.md. Unlabelled entries are refused.
+{"brand": "apple", "expected": null, "fqdn": "mail.isupport-appie-mxn.com", "labelled_at": "2026-09-26", "note": "alerted at score 0.85; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "apple", "expected": null, "fqdn": "isupport-appie-mxn.com", "labelled_at": "2026-09-26", "note": "alerted at score 0.85; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "netflix", "expected": null, "fqdn": "betflix-slot-wallet.net", "labelled_at": "2026-09-26", "note": "alerted at score 0.92; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "netflix", "expected": null, "fqdn": "netflix8.com", "labelled_at": "2026-09-26", "note": "alerted at score 1.00; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "microsoft", "expected": null, "fqdn": "xj.off1ce.com", "labelled_at": "2026-09-26", "note": "alerted at score 1.00; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "microsoft", "expected": null, "fqdn": "xdo.off1ce.com", "labelled_at": "2026-09-26", "note": "alerted at score 1.00; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "microsoft", "expected": null, "fqdn": "off1ce.com", "labelled_at": "2026-09-26", "note": "alerted at score 1.00; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "microsoft", "expected": null, "fqdn": "gx.off1ce.com", "labelled_at": "2026-09-26", "note": "alerted at score 1.00; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "netflix", "expected": null, "fqdn": "betflix.ws", "labelled_at": "2026-09-26", "note": "alerted at score 0.82; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "netflix", "expected": null, "fqdn": "betflix888ths.online", "labelled_at": "2026-09-26", "note": "alerted at score 0.82; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "netflix", "expected": null, "fqdn": "betflix789.bet", "labelled_at": "2026-09-26", "note": "alerted at score 0.82; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "netflix", "expected": null, "fqdn": "www.netfile.ca", "labelled_at": "2026-09-26", "note": "alerted at score 0.82; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "netflix", "expected": null, "fqdn": "netfile.ca", "labelled_at": "2026-09-26", "note": "alerted at score 0.82; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "netflix", "expected": null, "fqdn": "betflik928-betflix-slot.com", "labelled_at": "2026-09-26", "note": "alerted at score 0.82; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "netflix", "expected": null, "fqdn": "neetflix-lordfilms.ru", "labelled_at": "2026-09-26", "note": "alerted at score 0.84; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "microsoft", "expected": null, "fqdn": "ddc.webshell.dodsuite.office365.us", "labelled_at": "2026-09-26", "note": "alerted at score 1.00; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "microsoft", "expected": null, "fqdn": "dde.webshell.dodsuite.office365.us", "labelled_at": "2026-09-26", "note": "alerted at score 1.00; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "microsoft", "expected": null, "fqdn": "webshell.dodsuite.office365.us", "labelled_at": "2026-09-26", "note": "alerted at score 1.00; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "apple", "expected": null, "fqdn": "www.xn--ppl-dla2c.com", "labelled_at": "2026-09-26", "note": "alerted at score 1.00; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "paypal", "expected": null, "fqdn": "backup.pypal.com", "labelled_at": "2026-09-26", "note": "alerted at score 1.00; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "microsoft", "expected": null, "fqdn": "roaming.api.office.net", "labelled_at": "2026-09-26", "note": "alerted at score 1.00; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "microsoft", "expected": null, "fqdn": "macrosoft.lt", "labelled_at": "2026-09-26", "note": "alerted at score 0.85; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "microsoft", "expected": null, "fqdn": "wiki.macrosoft.lt", "labelled_at": "2026-09-26", "note": "alerted at score 0.85; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "microsoft", "expected": null, "fqdn": "www.microzoft.com", "labelled_at": "2026-09-26", "note": "alerted at score 1.00; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "amazon", "expected": null, "fqdn": "xn--mazon-2qa.de", "labelled_at": "2026-09-26", "note": "alerted at score 1.00; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "microsoft", "expected": null, "fqdn": "sun.macrosoft.lt", "labelled_at": "2026-09-26", "note": "alerted at score 0.85; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "microsoft", "expected": null, "fqdn": "imprentamorales.maicrosoft.eu", "labelled_at": "2026-09-26", "note": "alerted at score 0.86; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "microsoft", "expected": null, "fqdn": "www.163microsoft.ph", "labelled_at": "2026-09-26", "note": "alerted at score 0.86; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "microsoft", "expected": null, "fqdn": "assets.livee.com", "labelled_at": "2026-09-26", "note": "alerted at score 1.00; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "microsoft", "expected": null, "fqdn": "officeh.com", "labelled_at": "2026-09-26", "note": "alerted at score 1.00; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "paypal", "expected": null, "fqdn": "client.paymal.com", "labelled_at": "2026-09-26", "note": "alerted at score 1.00; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "microsoft", "expected": null, "fqdn": "www.migrosoft.com", "labelled_at": "2026-09-26", "note": "alerted at score 1.00; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "microsoft", "expected": null, "fqdn": "migrosoft.com", "labelled_at": "2026-09-26", "note": "alerted at score 1.00; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "microsoft", "expected": null, "fqdn": "array501.prod.do.dsp.mp.microzoft.com", "labelled_at": "2026-09-26", "note": "alerted at score 1.00; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "amazon", "expected": null, "fqdn": "amazlon.de", "labelled_at": "2026-09-26", "note": "alerted at score 1.00; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "apple", "expected": null, "fqdn": "awesome.icoud.com", "labelled_at": "2026-09-26", "note": "alerted at score 1.00; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "microsoft", "expected": null, "fqdn": "g.sst.microsobts.com", "labelled_at": "2026-09-26", "note": "alerted at score 0.77; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "microsoft", "expected": null, "fqdn": "apm.vpce.gdw55e.microsobts.com", "labelled_at": "2026-09-26", "note": "alerted at score 0.77; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "microsoft", "expected": null, "fqdn": "gui.microsobts.com", "labelled_at": "2026-09-26", "note": "alerted at score 0.77; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": "microsoft", "expected": null, "fqdn": "reporting.microsobts.com", "labelled_at": "2026-09-26", "note": "alerted at score 0.77; label from the screenshot", "source": "alerts", "suggestion": null}
+{"brand": null, "expected": null, "fqdn": "hummelcloud.net", "labelled_at": "2026-09-26", "note": "word ending in l before cloud, read as icloud", "source": "calibration", "suggestion": "legitimate"}
+{"brand": null, "expected": null, "fqdn": "bigbullcloud.com", "labelled_at": "2026-09-26", "note": "same pattern", "source": "calibration", "suggestion": "legitimate"}
+{"brand": null, "expected": null, "fqdn": "vercelcloud.com", "labelled_at": "2026-09-26", "note": "same pattern", "source": "calibration", "suggestion": "legitimate"}
+{"brand": null, "expected": null, "fqdn": "vesselcloud.dev", "labelled_at": "2026-09-26", "note": "same pattern", "source": "calibration", "suggestion": "legitimate"}
+{"brand": null, "expected": null, "fqdn": "voxelclouddao.xyz", "labelled_at": "2026-09-26", "note": "same pattern", "source": "calibration", "suggestion": "legitimate"}
+{"brand": null, "expected": null, "fqdn": "ateliergamelle.com", "labelled_at": "2026-09-26", "note": "rn/m folding brushed against ameli", "source": "calibration", "suggestion": "legitimate"}
+{"brand": null, "expected": null, "fqdn": "thedarnells.org", "labelled_at": "2026-09-26", "note": "same pattern", "source": "calibration", "suggestion": "legitimate"}
+{"brand": null, "expected": null, "fqdn": "amell.family", "labelled_at": "2026-09-26", "note": "surname colliding with a short brand token", "source": "calibration", "suggestion": "legitimate"}
+{"brand": null, "expected": null, "fqdn": "hicloud.net", "labelled_at": "2026-09-26", "note": "Huawei: a genuine dnstwist variant of icloud", "source": "calibration", "suggestion": "legitimate"}
+{"brand": null, "expected": null, "fqdn": "livee.com", "labelled_at": "2026-09-26", "note": "a genuine dnstwist variant of live.com", "source": "calibration", "suggestion": "legitimate"}
+{"brand": null, "expected": null, "fqdn": "microsoft-falcon.net", "labelled_at": "2026-09-26", "note": "Microsoft's own infrastructure, shaped like a combosquat", "source": "calibration", "suggestion": "legitimate"}
+{"brand": "microsoft", "expected": null, "fqdn": "www.theodore3.com", "labelled_at": "2026-09-26", "note": "listed by openphish; confirm from the capture", "source": "openphish", "suggestion": "phishing"}
+{"brand": "apple", "expected": null, "fqdn": "apple-sun95.pages.dev", "labelled_at": "2026-09-26", "note": "listed by openphish; confirm from the capture", "source": "openphish", "suggestion": "phishing"}
+{"brand": "netflix", "expected": null, "fqdn": "nikhilkriiitb-pixel.github.io", "labelled_at": "2026-09-26", "note": "listed by openphish; confirm from the capture", "source": "openphish", "suggestion": "phishing"}
+{"brand": "netflix", "expected": null, "fqdn": "coolgoel123.github.io", "labelled_at": "2026-09-26", "note": "listed by openphish; confirm from the capture", "source": "openphish", "suggestion": "phishing"}
+{"brand": "amazon", "expected": null, "fqdn": "s3.eu-north-1.amazonaws.com", "labelled_at": "2026-09-26", "note": "listed by openphish; confirm from the capture", "source": "openphish", "suggestion": "phishing"}
+{"brand": "amazon", "expected": null, "fqdn": "mgarcia33266.github.io", "labelled_at": "2026-09-26", "note": "listed by openphish; confirm from the capture", "source": "openphish", "suggestion": "phishing"}
+{"brand": "netflix", "expected": null, "fqdn": "mickyyk.github.io", "labelled_at": "2026-09-26", "note": "listed by openphish; confirm from the capture", "source": "openphish", "suggestion": "phishing"}
+{"brand": "netflix", "expected": null, "fqdn": "chirag0002.github.io", "labelled_at": "2026-09-26", "note": "listed by openphish; confirm from the capture", "source": "openphish", "suggestion": "phishing"}
+{"brand": "netflix", "expected": null, "fqdn": "jucosentino.github.io", "labelled_at": "2026-09-26", "note": "listed by openphish; confirm from the capture", "source": "openphish", "suggestion": "phishing"}
+{"brand": "netflix", "expected": null, "fqdn": "biswadeep-biswas.github.io", "labelled_at": "2026-09-26", "note": "listed by openphish; confirm from the capture", "source": "openphish", "suggestion": "phishing"}
+{"brand": "amazon", "expected": null, "fqdn": "anushka-git15.github.io", "labelled_at": "2026-09-26", "note": "listed by openphish; confirm from the capture", "source": "openphish", "suggestion": "phishing"}
+{"brand": "amazon", "expected": null, "fqdn": "rohitfuke.github.io", "labelled_at": "2026-09-26", "note": "listed by openphish; confirm from the capture", "source": "openphish", "suggestion": "phishing"}
+{"brand": "amazon", "expected": null, "fqdn": "garvbhimsaria-alt.github.io", "labelled_at": "2026-09-26", "note": "listed by openphish; confirm from the capture", "source": "openphish", "suggestion": "phishing"}
+{"brand": "amazon", "expected": null, "fqdn": "s3.us-east-1.amazonaws.com", "labelled_at": "2026-09-26", "note": "listed by openphish; confirm from the capture", "source": "openphish", "suggestion": "phishing"}
+{"brand": "apple", "expected": null, "fqdn": "proxy-test-001.pages.dev", "labelled_at": "2026-09-26", "note": "listed by openphish; confirm from the capture", "source": "openphish", "suggestion": "phishing"}
+{"brand": "amazon", "expected": null, "fqdn": "skydiveraleighfil.s3.eu-north-1.amazonaws.com", "labelled_at": "2026-09-26", "note": "listed by openphish; confirm from the capture", "source": "openphish", "suggestion": "phishing"}
+{"brand": "microsoft", "expected": null, "fqdn": "microsoft.authorised-support.com", "labelled_at": "2026-09-26", "note": "listed by openphish; confirm from the capture", "source": "openphish", "suggestion": "phishing"}
+{"brand": "amazon", "expected": null, "fqdn": "aniket8303.github.io", "labelled_at": "2026-09-26", "note": "listed by openphish; confirm from the capture", "source": "openphish", "suggestion": "phishing"}
+{"brand": "amazon", "expected": null, "fqdn": "rabiazahid724.github.io", "labelled_at": "2026-09-26", "note": "listed by openphish; confirm from the capture", "source": "openphish", "suggestion": "phishing"}

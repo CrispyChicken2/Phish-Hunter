@@ -24,6 +24,10 @@ class DatasetError(ValueError):
     """A dataset file that cannot be trusted to mean what it says."""
 
 
+class UnlabelledSiteError(DatasetError):
+    """The builder produced this entry and no human has labelled it yet."""
+
+
 @dataclass(frozen=True, slots=True)
 class LabelledSite:
     fqdn: str
@@ -34,7 +38,7 @@ class LabelledSite:
     note: str | None = None
 
 
-def _parse_line(raw: str, path: Path, line_number: int) -> LabelledSite:
+def _parse_line(raw: str, path: Path, line_number: int, allow_unlabelled: bool) -> LabelledSite:
     try:
         payload = json.loads(raw)
     except json.JSONDecodeError as exc:
@@ -46,6 +50,21 @@ def _parse_line(raw: str, path: Path, line_number: int) -> LabelledSite:
     if missing:
         raise DatasetError(f"{path}:{line_number}: missing field(s) {sorted(missing)}")
 
+    if payload["expected"] is None:
+        if not allow_unlabelled:
+            raise UnlabelledSiteError(
+                f"{path}:{line_number}: {payload['fqdn']} has no label yet. "
+                'Set "expected" for every candidate; see docs/labelling-protocol.md'
+            )
+        # Reviewing tools need to see the candidate; evaluation never does.
+        return LabelledSite(
+            fqdn=str(payload["fqdn"]).strip().lower(),
+            expected=Label.UNKNOWN,
+            source=str(payload["source"]),
+            labelled_at=date.fromisoformat(str(payload["labelled_at"])),
+            brand=payload.get("brand"),
+            note=payload.get("note"),
+        )
     try:
         expected = Label(payload["expected"])
     except ValueError as exc:
@@ -68,12 +87,12 @@ def _parse_line(raw: str, path: Path, line_number: int) -> LabelledSite:
     )
 
 
-def iter_dataset(path: Path) -> Iterator[LabelledSite]:
+def iter_dataset(path: Path, *, allow_unlabelled: bool = False) -> Iterator[LabelledSite]:
     """Yield each labelled site, naming the offending line when one is malformed."""
     with path.open(encoding="utf-8") as handle:
         for line_number, raw in enumerate(handle, start=1):
             if raw.strip() and not raw.lstrip().startswith("#"):
-                yield _parse_line(raw, path, line_number)
+                yield _parse_line(raw, path, line_number, allow_unlabelled)
 
 
 def load_dataset(path: Path) -> list[LabelledSite]:
