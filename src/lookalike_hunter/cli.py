@@ -14,6 +14,7 @@ from lookalike_hunter.classify.base import Classifier, StubClassifier
 from lookalike_hunter.classify.mistral import MistralClassifier, list_vision_models
 from lookalike_hunter.classify.runner import run_classifications
 from lookalike_hunter.config import Settings, load_settings
+from lookalike_hunter.eval.arms import ARM_SCORING_ONLY, ARM_SCORING_PLUS_VLM
 from lookalike_hunter.eval.build import (
     candidates_from_alerts,
     candidates_from_feed,
@@ -24,7 +25,7 @@ from lookalike_hunter.eval.build import (
 from lookalike_hunter.eval.dataset import iter_dataset
 from lookalike_hunter.eval.feeds import OPENPHISH_FEED_URL
 from lookalike_hunter.eval.report import write_report
-from lookalike_hunter.eval.runner import ARM_SCORING_ONLY, run_evaluation
+from lookalike_hunter.eval.runner import run_evaluation
 from lookalike_hunter.ingest.pipeline import run_pipeline
 from lookalike_hunter.ingest.sources import CertSource, CertstreamSource, ReplaySource
 from lookalike_hunter.ingest.store import MatchStore, PendingCapture, connect_with_retry
@@ -208,14 +209,20 @@ def cmd_evaluate(settings: Settings, args: argparse.Namespace) -> None:
     index = VariantIndex.from_brands(settings.brands, settings.variants.swap_tlds)
     scorer = Scorer(settings.brands, settings.scoring, index)
     report = run_evaluation(
-        args.dataset, scorer, settings.scoring.alert_threshold, arms=tuple(args.arms)
+        args.dataset,
+        scorer,
+        settings.scoring.alert_threshold,
+        arms=tuple(args.arms),
+        db_path=settings.db_path,
+        backend=args.backend,
     )
     json_path, markdown_path = write_report(report, args.out)
 
     for arm in report.arms.values():
         m = arm.metrics
         print(f"{arm.name}: accuracy {m.accuracy:.2%} ({m.correct}/{m.total}), "
-              f"macro F1 {m.macro_f1:.4f}, {len(arm.mistakes)} mistake(s)")  # fmt: skip
+              f"macro F1 {m.macro_f1:.4f}, {len(arm.mistakes)} mistake(s), "
+              f"{arm.excluded} excluded")  # fmt: skip
         for cls in m.per_class.values():
             print(
                 f"    {safe_text(cls.label, 12):<12} "
@@ -314,7 +321,10 @@ def main(argv: list[str] | None = None) -> None:
     evaluate = sub.add_parser("evaluate", help="Measure accuracy against a labelled dataset")
     evaluate.add_argument("--dataset", type=Path, required=True, help="Labelled dataset (JSONL)")
     evaluate.add_argument("--out", type=Path, default=Path("data/eval"))
-    evaluate.add_argument("--arms", nargs="+", default=[ARM_SCORING_ONLY])
+    evaluate.add_argument("--arms", nargs="+", default=[ARM_SCORING_ONLY, ARM_SCORING_PLUS_VLM])
+    evaluate.add_argument(
+        "--backend", default=None, help="Only use Verdicts from this classifier backend"
+    )
     evaluate.set_defaults(func=cmd_evaluate)
 
     verdicts = sub.add_parser("verdicts", help="List recent verdicts with their evidence")
