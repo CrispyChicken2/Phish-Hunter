@@ -62,6 +62,9 @@ class Candidate:
             "source": self.source,
             "labelled_at": today.isoformat(),
             "note": self.note,
+            # The reviewer sets this to "feed" if the site is gone and the class
+            # rests on the listing alone.
+            "label_basis": "screenshot",
         }
         return json.dumps(payload, sort_keys=True)
 

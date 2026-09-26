@@ -13,9 +13,10 @@ import pytest
 
 from lookalike_hunter.classify.schema import Label
 from lookalike_hunter.config import load_settings
+from lookalike_hunter.eval.arms import ARM_SCORING_ONLY
 from lookalike_hunter.eval.dataset import DatasetError, load_dataset
 from lookalike_hunter.eval.report import write_report
-from lookalike_hunter.eval.runner import ARM_SCORING_ONLY, run_evaluation
+from lookalike_hunter.eval.runner import run_evaluation
 from lookalike_hunter.scoring.scorer import Scorer
 from lookalike_hunter.variants.generator import VariantIndex
 

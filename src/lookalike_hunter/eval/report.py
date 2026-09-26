@@ -14,15 +14,6 @@ from pathlib import Path
 
 from lookalike_hunter.eval.metrics import Metrics
 
-# The Scorer works on names alone, so it can never output "parked": a parking page
-# and a phishing page have the same hostname shape. Stating this next to the numbers
-# stops the baseline looking better than it is, and it is the gap the VLM must close.
-SCORING_ONLY_CAVEAT = (
-    "The scoring-only arm predicts phishing at or above the alert threshold and "
-    "legitimate below it. It cannot predict parked or unreachable: those need the "
-    "page, not the name. Parked sites therefore count against its precision."
-)
-
 
 @dataclass(frozen=True, slots=True)
 class Prediction:
@@ -40,6 +31,10 @@ class ArmResult:
     metrics: Metrics
     predictions: list[Prediction] = field(default_factory=list)
     caveat: str | None = None
+    # Arms see different evidence, so each states how many sites it could judge.
+    evaluated: int = 0
+    excluded: int = 0
+    excluded_sites: list[str] = field(default_factory=list)
 
     @property
     def mistakes(self) -> list[Prediction]:
@@ -74,6 +69,9 @@ class EvaluationReport:
             lines += [
                 f"Accuracy: **{m.accuracy:.2%}** ({m.correct}/{m.total}) · "
                 f"macro F1: **{m.macro_f1:.4f}**",
+                "",
+                f"Judged {arm.evaluated} site(s); {arm.excluded} excluded"
+                + (" (no usable capture)." if arm.excluded else "."),
                 "",
                 "| Class | Support | Predicted | TP | FP | FN | Precision | Recall | F1 |",
                 "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
