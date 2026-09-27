@@ -151,3 +151,23 @@ async def test_limit_is_respected(tmp_path: Path, limit: int) -> None:
 
     stats = await run_classifications(store, StubClassifier(), None, limit, 2)
     assert stats.attempted == min(limit, 4)
+
+
+async def test_a_skipped_write_is_reported_not_silent(tmp_path: Path) -> None:
+    """A discarded verdict once made a model comparison report success with no data."""
+    store = store_with_capture(tmp_path)
+    verdict = Verdict(label=Label.PARKED, confidence=0.5, evidence="x")
+
+    first = store.save_verdict(1, "a.com", "mistral", "m", verdict, NOW)
+    second = store.save_verdict(1, "a.com", "mistral", "m", verdict, NOW)
+
+    assert first is True
+    assert second is False  # same capture, backend and model: skipped, and said so
+
+
+async def test_the_same_capture_takes_one_verdict_per_model(tmp_path: Path) -> None:
+    store = store_with_capture(tmp_path)
+    verdict = Verdict(label=Label.PARKED, confidence=0.5, evidence="x")
+
+    assert store.save_verdict(1, "a.com", "mistral", "small", verdict, NOW) is True
+    assert store.save_verdict(1, "a.com", "mistral", "large", verdict, NOW) is True

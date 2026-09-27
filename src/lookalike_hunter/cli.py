@@ -209,6 +209,50 @@ def cmd_dataset(settings: Settings, args: argparse.Namespace) -> None:
     print('Now set "expected" on each new line: see docs/labelling-protocol.md')
 
 
+def cmd_compare_models(settings: Settings, args: argparse.Namespace) -> None:
+    """Run the vision arm once per model over the same dataset and tabulate.
+
+    Same sites, same captures, same labels: only the model changes, so the
+    accuracy-against-cost trade is the only thing the table can be showing.
+    """
+    index = VariantIndex.from_brands(settings.brands, settings.variants.swap_tlds)
+    scorer = Scorer(settings.brands, settings.scoring, index)
+
+    rows = []
+    for model in args.models:
+        report = run_evaluation(
+            args.dataset,
+            scorer,
+            settings.scoring.alert_threshold,
+            arms=(ARM_SCORING_PLUS_VLM,),
+            db_path=settings.db_path,
+            backend=args.backend,
+            model=model,
+        )
+        arm = report.arms[ARM_SCORING_PLUS_VLM]
+        spend = arm.cost
+        rows.append(
+            (
+                model,
+                arm.evaluated,
+                arm.metrics.accuracy,
+                arm.metrics.macro_f1,
+                spend.classify_ms / arm.evaluated if spend and arm.evaluated else 0.0,
+                spend.tokens if spend else 0,
+                spend.cost_usd if spend else 0.0,
+            )
+        )
+
+    header = f"{'model':24} {'judged':>6} {'accuracy':>9} {'macroF1':>8} {'ms/site':>8} {'tokens':>8} {'USD':>8}"  # noqa: E501
+    print(header)
+    print("-" * len(header))
+    for model, judged, accuracy, f1, ms, tokens, cost in rows:
+        print(
+            f"{safe_text(model, 24):24} {judged:>6} {accuracy:>8.2%} {f1:>8.4f} "
+            f"{ms:>8.0f} {tokens:>8} {cost:>8.4f}"
+        )
+
+
 def cmd_evaluate(settings: Settings, args: argparse.Namespace) -> None:
     """Measure the pipeline against a labelled dataset and write a report."""
     index = VariantIndex.from_brands(settings.brands, settings.variants.swap_tlds)
@@ -220,6 +264,7 @@ def cmd_evaluate(settings: Settings, args: argparse.Namespace) -> None:
         arms=tuple(args.arms),
         db_path=settings.db_path,
         backend=args.backend,
+        model=args.model,
     )
     json_path, markdown_path = write_report(report, args.out)
 
@@ -335,7 +380,16 @@ def main(argv: list[str] | None = None) -> None:
     evaluate.add_argument(
         "--backend", default=None, help="Only use Verdicts from this classifier backend"
     )
+    evaluate.add_argument(
+        "--model", default=None, help="Only use Verdicts from this model, for comparisons"
+    )
     evaluate.set_defaults(func=cmd_evaluate)
+
+    compare = sub.add_parser("compare-models", help="Tabulate models over the same dataset")
+    compare.add_argument("--dataset", type=Path, required=True)
+    compare.add_argument("--models", nargs="+", required=True)
+    compare.add_argument("--backend", default="mistral")
+    compare.set_defaults(func=cmd_compare_models)
 
     verdicts = sub.add_parser("verdicts", help="List recent verdicts with their evidence")
     verdicts.add_argument("--limit", type=int, default=20)

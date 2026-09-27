@@ -146,8 +146,13 @@ CREATE TABLE IF NOT EXISTS captures (
     error            VARCHAR
 );
 
--- One verdict per capture and backend, so a re-run with another model is kept
--- alongside the previous one for the Day 3 comparison.
+"""
+
+SCHEMA_VERDICTS = """
+-- One verdict per capture, backend and model. The model must be part of the key:
+-- without it, a second model's verdicts collide with the first's and ON CONFLICT
+-- DO NOTHING discards them silently, so a comparison run stores nothing while
+-- reporting success. That happened.
 CREATE SEQUENCE IF NOT EXISTS verdicts_id_seq;
 CREATE TABLE IF NOT EXISTS verdicts (
     verdict_id          BIGINT PRIMARY KEY DEFAULT nextval('verdicts_id_seq'),
@@ -165,7 +170,7 @@ CREATE TABLE IF NOT EXISTS verdicts (
     completion_tokens   BIGINT,
     cost_usd            DOUBLE,
     error               VARCHAR,
-    UNIQUE (capture_id, backend)
+    UNIQUE (capture_id, backend, model)
 );
 """
 
@@ -178,6 +183,39 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
 )
 
 
+def _widen_verdict_uniqueness(con: duckdb.DuckDBPyConnection) -> None:
+    """Make (capture_id, backend, model) unique on databases created before models.
+
+    The original constraint was (capture_id, backend). With ON CONFLICT DO NOTHING
+    that silently discarded every verdict from a second model: runs reported
+    success while storing nothing, and a model comparison showed no data. A
+    constraint cannot be altered in place, so the table is rebuilt.
+    """
+    definition = con.execute(
+        "SELECT sql FROM duckdb_tables() WHERE table_name = 'verdicts'"
+    ).fetchone()
+    if definition is None or "UNIQUE(capture_id, backend, model)" in definition[0].replace(" ", ""):
+        return
+    log.info("store.migrating_verdicts_uniqueness")
+    con.execute("BEGIN TRANSACTION")
+    con.execute("ALTER TABLE verdicts RENAME TO verdicts_old")
+    con.execute(SCHEMA_VERDICTS)
+    con.execute(
+        """
+        INSERT INTO verdicts
+            (verdict_id, capture_id, fqdn, backend, model, label, confidence,
+             brand_impersonated, evidence, classified_at, latency_ms, prompt_tokens,
+             completion_tokens, cost_usd, error)
+        SELECT verdict_id, capture_id, fqdn, backend, model, label, confidence,
+               brand_impersonated, evidence, classified_at, latency_ms, prompt_tokens,
+               completion_tokens, cost_usd, error
+        FROM verdicts_old
+        """
+    )
+    con.execute("DROP TABLE verdicts_old")
+    con.execute("COMMIT")
+
+
 class MatchStore:
     def __init__(self, db_path: Path, alert_threshold: float) -> None:
         self.db_path = db_path
@@ -185,10 +223,12 @@ class MatchStore:
         db_path.parent.mkdir(parents=True, exist_ok=True)
         with connect_with_retry(db_path) as con:
             con.execute(SCHEMA)
+            con.execute(SCHEMA_VERDICTS)
             # CREATE TABLE IF NOT EXISTS leaves an older database without the newer
             # columns, so a running install would break on the next write.
             for column, sql_type in MIGRATIONS:
                 con.execute(f"ALTER TABLE verdicts ADD COLUMN IF NOT EXISTS {column} {sql_type}")
+            _widen_verdict_uniqueness(con)
 
     def write(self, rows: Sequence[tuple[Certificate, Match]]) -> int:
         """Persist Matches and their Certificates; returns the number of new Matches."""
@@ -308,8 +348,14 @@ class MatchStore:
                 ],
             )
 
-    def pending_classifications(self, limit: int, backend: str) -> list[PendingClassification]:
-        """Captures with no verdict yet from this backend, newest first."""
+    def pending_classifications(
+        self, limit: int, backend: str, model: str | None = None
+    ) -> list[PendingClassification]:
+        """Captures with no verdict yet from this backend and model, newest first.
+
+        Model-aware so a second model re-judges the same captures instead of
+        inheriting the first model's answers.
+        """
         with connect_with_retry(self.db_path, read_only=True) as con:
             rows = con.execute(
                 """
@@ -319,11 +365,12 @@ class MatchStore:
                 WHERE NOT EXISTS (
                     SELECT 1 FROM verdicts v
                     WHERE v.capture_id = c.capture_id AND v.backend = ?
+                      AND (? IS NULL OR v.model IS NOT DISTINCT FROM ?)
                 )
                 ORDER BY c.captured_at DESC
                 LIMIT ?
                 """,
-                [backend, limit],
+                [backend, model, model, limit],
             ).fetchall()
         return [
             PendingClassification(
@@ -348,11 +395,16 @@ class MatchStore:
         classified_at: datetime,
         latency_ms: int | None = None,
         error: str | None = None,
-    ) -> None:
-        """Store a verdict, or a failure row so the capture is not retried forever."""
+    ) -> bool:
+        """Store a verdict, or a failure row so the capture is not retried forever.
+
+        Returns whether a row was written. A conflicting row is skipped rather than
+        overwritten, and the caller is told: a silent discard once made a whole
+        model comparison report success while storing nothing.
+        """
         usage = verdict.usage if verdict else None
         with connect_with_retry(self.db_path) as con:
-            con.execute(
+            inserted = con.execute(
                 """
                 INSERT INTO verdicts
                     (capture_id, fqdn, backend, model, label, confidence, brand_impersonated,
@@ -360,6 +412,7 @@ class MatchStore:
                      cost_usd, error)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT DO NOTHING
+                RETURNING verdict_id
                 """,
                 [
                     capture_id,
@@ -378,6 +431,17 @@ class MatchStore:
                     error,
                 ],
             )
+            # RETURNING yields nothing when ON CONFLICT skipped the row.
+            written = bool(inserted.fetchall())
+        if not written:
+            log.warning(
+                "store.verdict_not_written",
+                fqdn=fqdn,
+                backend=backend,
+                model=model,
+                reason="a verdict already exists for this capture, backend and model",
+            )
+        return written
 
     def clear_verdicts(
         self, backend: str, model: str | None = None, limit: int | None = None

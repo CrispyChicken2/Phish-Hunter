@@ -193,3 +193,49 @@ def test_unknown_labels_are_excluded_from_metrics(tmp_path: Path, scorer: Scorer
     assert report.unjudgeable == 1
     assert "unknown" not in report.arms[ARM_SCORING_ONLY].metrics.per_class
     assert "excluded as unknown" in report.to_markdown()
+
+
+def test_verdicts_from_different_models_do_not_overwrite(tmp_path: Path) -> None:
+    """Comparing models is meaningless if the second overwrites the first."""
+    store = MatchStore(tmp_path / "t.duckdb", 0.7)
+    store.save_capture(
+        CaptureResult(
+            "a.com", "https://a.com/", CaptureStatus.OK, NOW, 10, screenshot_path=Path("s.png")
+        )
+    )
+    for model, label in (("small", "parked"), ("large", "phishing")):
+        store.save_verdict(
+            capture_id=1,
+            fqdn="a.com",
+            backend="mistral",
+            model=model,
+            verdict=Verdict(label=Label(label), confidence=0.9, evidence="x"),
+            classified_at=NOW,
+        )
+
+    small = load_captures(store.db_path, ["a.com"], backend="mistral", model="small")
+    large = load_captures(store.db_path, ["a.com"], backend="mistral", model="large")
+
+    assert small["a.com"].verdict_label == "parked"
+    assert large["a.com"].verdict_label == "phishing"
+
+
+def test_pending_classifications_are_per_model(tmp_path: Path) -> None:
+    """A second model must re-judge captures, not inherit the first model's answers."""
+    store = MatchStore(tmp_path / "t.duckdb", 0.7)
+    store.save_capture(
+        CaptureResult(
+            "a.com", "https://a.com/", CaptureStatus.OK, NOW, 10, screenshot_path=Path("s.png")
+        )
+    )
+    store.save_verdict(
+        capture_id=1,
+        fqdn="a.com",
+        backend="mistral",
+        model="small",
+        verdict=Verdict(label=Label.PARKED, confidence=0.9, evidence="x"),
+        classified_at=NOW,
+    )
+
+    assert store.pending_classifications(10, "mistral", "small") == []
+    assert len(store.pending_classifications(10, "mistral", "large")) == 1
