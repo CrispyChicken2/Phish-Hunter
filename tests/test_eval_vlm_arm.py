@@ -177,3 +177,19 @@ def test_report_states_each_arm_denominator(tmp_path: Path, scorer: Scorer) -> N
 
     assert "Judged 2 site(s); 0 excluded" in markdown
     assert "Judged 1 site(s); 1 excluded (no usable capture)" in markdown
+
+
+def test_unknown_labels_are_excluded_from_metrics(tmp_path: Path, scorer: Scorer) -> None:
+    """A Cloudflare challenge is not a class; it is an absence of ground truth."""
+    dataset = dataset_file(
+        tmp_path,
+        [("paypa1-secure-login.com", "phishing"), ("macrosoft.lt", "unknown")],
+    )
+    store = store_with(tmp_path, [("paypa1-secure-login.com", CaptureStatus.OK, "phishing")])
+
+    report = run_evaluation(dataset, scorer, 0.7, arms=(ARM_SCORING_ONLY,), db_path=store.db_path)
+
+    assert report.dataset_size == 1  # only the judgeable site
+    assert report.unjudgeable == 1
+    assert "unknown" not in report.arms[ARM_SCORING_ONLY].metrics.per_class
+    assert "excluded as unknown" in report.to_markdown()

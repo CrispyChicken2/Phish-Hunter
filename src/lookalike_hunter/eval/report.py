@@ -67,6 +67,7 @@ class EvaluationReport:
     dataset_size: int
     generated_at: datetime
     alert_threshold: float
+    unjudgeable: int = 0
     arms: dict[str, ArmResult] = field(default_factory=dict)
 
     def to_json(self) -> str:
@@ -76,7 +77,8 @@ class EvaluationReport:
         lines = [
             "# Evaluation report",
             "",
-            f"- Dataset: `{self.dataset_path}` ({self.dataset_size} sites)",
+            f"- Dataset: `{self.dataset_path}` ({self.dataset_size} judgeable sites"
+            + (f", {self.unjudgeable} excluded as unknown)" if self.unjudgeable else ")"),
             f"- Generated: {self.generated_at:%Y-%m-%d %H:%M:%S} UTC",
             f"- Alert threshold: {self.alert_threshold}",
             "",
