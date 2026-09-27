@@ -12,6 +12,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
+from lookalike_hunter.classify.schema import Label
 from lookalike_hunter.eval.arms import (
     ARM_SCORING_ONLY,
     ARM_SCORING_PLUS_VLM,
@@ -87,8 +88,20 @@ def run_evaluation(
     if unknown:
         raise ValueError(f"unknown evaluation arm: {unknown[0]}")
 
-    sites = load_dataset(dataset_path)
-    log.info("eval.start", dataset=str(dataset_path), sites=len(sites), arms=list(arms))
+    all_sites = load_dataset(dataset_path)
+    # A site labelled unknown carries no ground truth: a Cloudflare challenge or an
+    # empty frame tells us nothing about either arm. Counting it as a class of its
+    # own would drag every macro average toward zero for no reason, so it is
+    # excluded and reported rather than quietly folded in.
+    sites = [s for s in all_sites if s.expected is not Label.UNKNOWN]
+    unjudgeable = len(all_sites) - len(sites)
+    log.info(
+        "eval.start",
+        dataset=str(dataset_path),
+        sites=len(sites),
+        unjudgeable=unjudgeable,
+        arms=list(arms),
+    )
 
     captures: dict[str, StoredCapture] = {}
     if ARM_SCORING_PLUS_VLM in arms and db_path is None:
@@ -117,6 +130,7 @@ def run_evaluation(
     return EvaluationReport(
         dataset_path=str(dataset_path),
         dataset_size=len(sites),
+        unjudgeable=unjudgeable,
         generated_at=datetime.now(UTC),
         alert_threshold=alert_threshold,
         arms=results,
