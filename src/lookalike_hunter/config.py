@@ -104,8 +104,9 @@ class ClassifyConfig(BaseModel):
     # Pixtral is no longer served by the API. The ministral family is vision
     # capable and included in the free tier, while mistral-small/medium answer
     # 429 with a limit of 0 until pay-as-you-go is enabled.
-    # 8b rather than 14b: it measured more accurate and faster on the evaluation
-    # dataset, so the default follows the measurement rather than the size.
+    # 8b rather than 14b: their accuracy differs by 2 sites out of 39, which is
+    # noise, while 8b is consistently faster and has a far higher rate limit. With
+    # accuracy tied, throughput decides; it is not evidence that 8b is smarter.
     # `lookalike-hunter models` lists what a given key can call.
     model: str = "ministral-8b-latest"
     api_base: str = "https://api.mistral.ai/v1"

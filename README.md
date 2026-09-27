@@ -191,9 +191,20 @@ Same sites, same captures, same labels; only the model changes.
 | `ministral-8b-latest` | 39 | **61.5%** | **0.326** | 1386 | 72576 |
 | `ministral-14b-latest` | 39 | 56.4% | 0.324 | 2418 | 11375 |
 
-The 8b model is both more accurate and faster than the 14b here, so the default
-should not simply be the largest available model. Cost is $0 on the free tier;
-prices are configurable so a paid run reports a real figure instead of implying one.
+**The accuracy differences here are not significant.** 8b and 14b disagree on 6
+of 39 sites, 4 in 8b's favour and 2 in 14b's: a net difference of 2 sites, which
+a coin flip reproduces most of the time. Read as "no measurable accuracy
+difference", not as "8b is better".
+
+The latency difference is real and consistent (1386 vs 2418 ms/site), as is the
+rate limit (188 vs 30 requests/minute). The default is `ministral-8b-latest` on
+those grounds: with accuracy tied, throughput decides, and throughput is a
+security property here too, since a slower classifier means longer before an
+analyst sees the alert and phishing kits live hours.
+
+Settling the accuracy question needs a larger dataset; on 39 sites it cannot be
+settled. Cost is $0 on the free tier; prices are configurable so a paid run
+reports a real figure instead of implying one.
 
 ### The alert threshold
 
