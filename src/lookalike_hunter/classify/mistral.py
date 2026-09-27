@@ -17,6 +17,7 @@ import truststore
 from lookalike_hunter.classify.base import ClassificationError, ClassificationInput
 from lookalike_hunter.classify.schema import (
     SYSTEM_PROMPT,
+    TokenUsage,
     Verdict,
     build_user_prompt,
     parse_verdict,
@@ -70,8 +71,12 @@ class MistralClassifier:
         api_base: str = "https://api.mistral.ai/v1",
         timeout_s: float = 90.0,
         client: httpx.AsyncClient | None = None,
+        cost_per_1k_prompt_usd: float = 0.0,
+        cost_per_1k_completion_usd: float = 0.0,
     ) -> None:
         self.model = model
+        self._prompt_price = cost_per_1k_prompt_usd
+        self._completion_price = cost_per_1k_completion_usd
         self.api_base = api_base.rstrip("/")
         self._timeout = timeout_s
         self._owns_client = client is None
@@ -125,10 +130,26 @@ class MistralClassifier:
         if isinstance(content, list):  # some models return content parts
             content = "".join(part.get("text", "") for part in content)
         try:
-            return parse_verdict(content)
+            verdict = parse_verdict(content)
         except ValueError as exc:
             # Retryable: the model ignored the JSON contract this time.
             raise ClassificationError(str(exc)) from exc
+        return verdict.model_copy(update={"usage": self._usage(response.json())})
+
+    def _usage(self, payload: dict[str, Any]) -> TokenUsage:
+        """Usage as the API reported it; absent fields stay zero rather than guessed."""
+        usage = payload.get("usage") or {}
+        prompt = int(usage.get("prompt_tokens", 0))
+        completion = int(usage.get("completion_tokens", 0))
+        return TokenUsage(
+            prompt_tokens=prompt,
+            completion_tokens=completion,
+            total_tokens=int(usage.get("total_tokens", prompt + completion)),
+            cost_usd=round(
+                prompt / 1000 * self._prompt_price + completion / 1000 * self._completion_price,
+                6,
+            ),
+        )
 
     @staticmethod
     def _raise_for_status(response: httpx.Response) -> None:
