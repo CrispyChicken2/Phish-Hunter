@@ -199,3 +199,66 @@ def test_report_is_written_in_both_formats(tmp_path: Path, scorer: Scorer) -> No
     assert "Confusion matrix" in markdown
     assert "cannot predict parked" in markdown  # the caveat travels with the numbers
     assert "paypal-login-fixture.com" in markdown  # mistakes are visible
+
+
+# ----------------------------------------------------------------------- sweep
+
+
+def test_threshold_sweep_is_reported(scorer: Scorer) -> None:
+    arm = run_evaluation(DATASET, scorer, alert_threshold=0.7).arms[ARM_SCORING_ONLY]
+
+    assert arm.sweep is not None
+    thresholds = [p.threshold for p in arm.sweep.points]
+    assert thresholds == sorted(thresholds)
+    configured = [p for p in arm.sweep.points if p.is_configured]
+    assert len(configured) == 1 and configured[0].threshold == 0.7
+
+
+def test_sweep_shows_the_precision_recall_trade(scorer: Scorer) -> None:
+    """Raising the threshold must shrink the queue and never raise recall."""
+    sweep = run_evaluation(DATASET, scorer, 0.7).arms[ARM_SCORING_ONLY].sweep
+    assert sweep is not None
+    points = {p.threshold: p for p in sweep.points}
+
+    assert points[0.4].alerts >= points[0.9].alerts
+    assert points[0.4].recall >= points[0.9].recall
+
+
+def test_sweep_matches_the_arm_at_the_configured_threshold(scorer: Scorer) -> None:
+    """The sweep and the headline metrics must agree where they overlap."""
+    arm = run_evaluation(DATASET, scorer, alert_threshold=0.7).arms[ARM_SCORING_ONLY]
+    assert arm.sweep is not None
+    configured = next(p for p in arm.sweep.points if p.is_configured)
+
+    assert configured.precision == arm.metrics.per_class["phishing"].precision
+    assert configured.recall == arm.metrics.per_class["phishing"].recall
+
+
+# ------------------------------------------------------------------ per brand
+
+
+def test_per_brand_breakdown(scorer: Scorer) -> None:
+    arm = run_evaluation(DATASET, scorer, alert_threshold=0.7).arms[ARM_SCORING_ONLY]
+
+    assert "paypal" in arm.per_brand
+    assert sum(m.total for m in arm.per_brand.values()) == arm.metrics.total
+
+
+def test_costly_mistakes_are_separated(scorer: Scorer) -> None:
+    """Phishing judged harmless is the expensive error and must stand out."""
+    arm = run_evaluation(DATASET, scorer, alert_threshold=0.7).arms[ARM_SCORING_ONLY]
+
+    costly = {p.fqdn for p in arm.costly_mistakes}
+    assert costly == {"generic-account-alert.com"}  # a real attack let through
+    assert len(arm.mistakes) > len(arm.costly_mistakes)
+
+
+def test_report_renders_sweep_and_brands(tmp_path: Path, scorer: Scorer) -> None:
+    report = run_evaluation(DATASET, scorer, alert_threshold=0.7)
+
+    markdown = report.to_markdown()
+
+    assert "Alert threshold sweep" in markdown
+    assert "Per brand" in markdown
+    assert "configured" in markdown
+    assert "Phishing judged harmless" in markdown

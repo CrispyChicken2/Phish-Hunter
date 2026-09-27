@@ -52,10 +52,15 @@ def load_captures(
                      WHERE v.capture_id = c.capture_id
                        AND (? IS NULL OR v.backend = ?)
                        AND v.label <> 'error'
+                     ORDER BY v.verdict_id DESC LIMIT 1),
+                   (SELECT v.brand_impersonated FROM verdicts v
+                     WHERE v.capture_id = c.capture_id
+                       AND (? IS NULL OR v.backend = ?)
+                       AND v.label <> 'error'
                      ORDER BY v.verdict_id DESC LIMIT 1)
             FROM captures c JOIN latest USING (capture_id)
             """,
-            [list(fqdns), backend, backend],
+            [list(fqdns), backend, backend, backend, backend],
         ).fetchall()
     return {
         fqdn: StoredCapture(
@@ -63,8 +68,9 @@ def load_captures(
             status=status,
             verdict_label=verdict,
             screenshot_path=Path(shot) if shot else None,
+            verdict_brand=verdict_brand,
         )
-        for fqdn, status, shot, verdict in rows
+        for fqdn, status, shot, verdict, verdict_brand in rows
     }
 
 
@@ -85,15 +91,16 @@ def run_evaluation(
     log.info("eval.start", dataset=str(dataset_path), sites=len(sites), arms=list(arms))
 
     captures: dict[str, StoredCapture] = {}
-    if ARM_SCORING_PLUS_VLM in arms:
-        if db_path is None:
-            raise ValueError(f"{ARM_SCORING_PLUS_VLM} needs a database of stored captures")
+    if ARM_SCORING_PLUS_VLM in arms and db_path is None:
+        raise ValueError(f"{ARM_SCORING_PLUS_VLM} needs a database of stored captures")
+    if db_path is not None:
+        # Screenshots make every arm's mistakes reviewable, not only the VLM's.
         captures = load_captures(db_path, [s.fqdn for s in sites], backend)
 
     results: dict[str, ArmResult] = {}
     for arm in arms:
         if arm == ARM_SCORING_ONLY:
-            results[arm] = scoring_only_arm(sites, scorer, alert_threshold)
+            results[arm] = scoring_only_arm(sites, scorer, alert_threshold, captures)
         else:
             results[arm] = scoring_plus_vlm_arm(sites, scorer, alert_threshold, captures)
         metrics = results[arm].metrics
