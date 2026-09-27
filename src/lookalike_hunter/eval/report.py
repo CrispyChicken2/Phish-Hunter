@@ -13,6 +13,7 @@ from datetime import datetime
 from pathlib import Path
 
 from lookalike_hunter.eval.metrics import Metrics
+from lookalike_hunter.eval.sweep import ThresholdSweep
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,6 +24,15 @@ class Prediction:
     score: float
     brand: str | None = None
     note: str | None = None
+    screenshot: str | None = None
+    # A Verdict naming an impersonated Brand while calling the page something other
+    # than phishing: an internal contradiction seen in live output, counted here.
+    verdict_brand: str | None = None
+
+    @property
+    def is_costly(self) -> bool:
+        """Phishing judged harmless: the error that lets an attack through."""
+        return self.expected == "phishing" and self.predicted != "phishing"
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,10 +45,20 @@ class ArmResult:
     evaluated: int = 0
     excluded: int = 0
     excluded_sites: list[str] = field(default_factory=list)
+    per_brand: dict[str, Metrics] = field(default_factory=dict)
+    sweep: ThresholdSweep | None = None
 
     @property
     def mistakes(self) -> list[Prediction]:
         return [p for p in self.predictions if p.expected != p.predicted]
+
+    @property
+    def costly_mistakes(self) -> list[Prediction]:
+        return [p for p in self.mistakes if p.is_costly]
+
+    @property
+    def contradictory_verdicts(self) -> list[Prediction]:
+        return [p for p in self.predictions if p.verdict_brand and p.predicted != "phishing"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,21 +112,87 @@ class EvaluationReport:
                 row = " | ".join(str(m.confusion[expected][p]) for p in labels)
                 lines.append(f"| **{expected}** | {row} |")
 
-            mistakes = arm.mistakes
-            lines += ["", f"### Mistakes ({len(mistakes)})", ""]
-            if mistakes:
+            if arm.per_brand:
                 lines += [
-                    "| Site | Expected | Predicted | Score |",
-                    "|---|---|---|---:|",
+                    "",
+                    "### Per brand",
+                    "",
+                    "| Brand | Sites | Accuracy | Macro F1 |",
+                    "|---|---:|---:|---:|",
+                ]
+                for brand, bm in sorted(arm.per_brand.items()):
+                    lines.append(
+                        f"| {brand} | {bm.total} | {bm.accuracy:.2%} | {bm.macro_f1:.4f} |"
+                    )
+
+            costly = arm.costly_mistakes
+            lines += ["", f"### Mistakes ({len(arm.mistakes)}, of which {len(costly)} costly)", ""]
+            if costly:
+                lines += ["**Phishing judged harmless** (an attack would have gone through):", ""]
+                lines += _mistake_table(costly)
+            others = [p for p in arm.mistakes if not p.is_costly]
+            if others:
+                lines += ["", "**Other mistakes** (noise in the queue):", ""]
+                lines += _mistake_table(others)
+            if not arm.mistakes:
+                lines.append("None.")
+
+            if arm.contradictory_verdicts:
+                lines += [
+                    "",
+                    f"### Contradictory verdicts ({len(arm.contradictory_verdicts)})",
+                    "",
+                    "The model named an impersonated brand while labelling the page as "
+                    "something other than phishing.",
+                    "",
                     *(
-                        f"| `{p.fqdn}` | {p.expected} | {p.predicted} | {p.score:.2f} |"
-                        for p in mistakes
+                        f"- `{p.fqdn}`: {p.predicted}, brand {p.verdict_brand}"
+                        for p in arm.contradictory_verdicts
                     ),
                 ]
-            else:
-                lines.append("None.")
+
+            if arm.sweep is not None:
+                lines += _sweep_section(arm.sweep)
             lines.append("")
         return "\n".join(lines)
+
+
+def _mistake_table(predictions: list[Prediction]) -> list[str]:
+    rows = [
+        "| Site | Expected | Predicted | Score | Screenshot |",
+        "|---|---|---|---:|---|",
+    ]
+    rows += [
+        f"| `{p.fqdn}` | {p.expected} | {p.predicted} | {p.score:.2f} | "
+        f"{'`' + p.screenshot + '`' if p.screenshot else '-'} |"
+        for p in predictions
+    ]
+    return rows
+
+
+def _sweep_section(sweep: ThresholdSweep) -> list[str]:
+    lines = [
+        "",
+        "### Alert threshold sweep",
+        "",
+        "Phishing class only: the threshold decides what reaches an analyst.",
+        "",
+        "| Threshold | Alerts | TP | FP | FN | Precision | Recall | F1 | |",
+        "|---:|---:|---:|---:|---:|---:|---:|---:|---|",
+    ]
+    best = sweep.best_f1
+    for point in sweep.points:
+        marks = []
+        if point.is_configured:
+            marks.append("configured")
+        if best is not None and point.threshold == best.threshold:
+            marks.append("best F1")
+        lines.append(
+            f"| {point.threshold:.2f} | {point.alerts} | {point.true_positives} | "
+            f"{point.false_positives} | {point.false_negatives} | {point.precision:.4f} | "
+            f"{point.recall:.4f} | {point.f1:.4f} | {', '.join(marks)} |"
+        )
+    return lines
 
 
 def write_report(report: EvaluationReport, out_dir: Path) -> tuple[Path, Path]:

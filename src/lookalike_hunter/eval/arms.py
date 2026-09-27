@@ -9,14 +9,16 @@ denominator, and the sites excluded from an arm are counted rather than dropped.
 
 from __future__ import annotations
 
+from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
 from lookalike_hunter.classify.schema import Label
 from lookalike_hunter.eval.dataset import LabelledSite
-from lookalike_hunter.eval.metrics import compute_metrics
+from lookalike_hunter.eval.metrics import Metrics, compute_metrics
 from lookalike_hunter.eval.report import ArmResult, Prediction
+from lookalike_hunter.eval.sweep import sweep_thresholds
 from lookalike_hunter.scoring.scorer import Scorer
 
 ARM_SCORING_ONLY = "scoring_only"
@@ -44,6 +46,7 @@ class StoredCapture:
     status: str
     verdict_label: str | None = None
     screenshot_path: Path | None = None
+    verdict_brand: str | None = None
 
     @property
     def reachable(self) -> bool:
@@ -63,13 +66,26 @@ def score_of(scorer: Scorer, fqdn: str) -> tuple[float, str | None]:
     return best.score, best.brand
 
 
+def per_brand_metrics(predictions: Sequence[Prediction]) -> dict[str, Metrics]:
+    """Metrics split by Brand, which is where short-token weakness would show."""
+    grouped: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    for prediction in predictions:
+        grouped[prediction.brand or "(none)"].append((prediction.expected, prediction.predicted))
+    return {brand: compute_metrics(pairs) for brand, pairs in sorted(grouped.items())}
+
+
 def scoring_only_arm(
-    sites: Sequence[LabelledSite], scorer: Scorer, alert_threshold: float
+    sites: Sequence[LabelledSite],
+    scorer: Scorer,
+    alert_threshold: float,
+    captures: dict[str, StoredCapture] | None = None,
 ) -> ArmResult:
+    captures = captures or {}
     predictions = []
     for site in sites:
         score, brand = score_of(scorer, site.fqdn)
         predicted = Label.PHISHING if score >= alert_threshold else Label.LEGITIMATE
+        capture = captures.get(site.fqdn)
         predictions.append(
             Prediction(
                 fqdn=site.fqdn,
@@ -78,6 +94,7 @@ def scoring_only_arm(
                 score=score,
                 brand=brand or site.brand,
                 note=site.note,
+                screenshot=str(capture.screenshot_path) if capture else None,
             )
         )
     return ArmResult(
@@ -87,6 +104,9 @@ def scoring_only_arm(
         caveat=SCORING_ONLY_CAVEAT,
         evaluated=len(predictions),
         excluded=0,
+        per_brand=per_brand_metrics(predictions),
+        # The sweep belongs to the arm whose behaviour the threshold governs.
+        sweep=sweep_thresholds([(p.expected, p.score) for p in predictions], alert_threshold),
     )
 
 
@@ -126,6 +146,8 @@ def scoring_plus_vlm_arm(
                 score=score,
                 brand=brand or site.brand,
                 note=site.note,
+                screenshot=str(capture.screenshot_path) if capture.screenshot_path else None,
+                verdict_brand=capture.verdict_brand,
             )
         )
 
@@ -137,4 +159,5 @@ def scoring_plus_vlm_arm(
         evaluated=len(predictions),
         excluded=len(excluded),
         excluded_sites=excluded,
+        per_brand=per_brand_metrics(predictions),
     )
