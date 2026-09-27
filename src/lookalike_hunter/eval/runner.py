@@ -32,7 +32,10 @@ KNOWN_ARMS = (ARM_SCORING_ONLY, ARM_SCORING_PLUS_VLM)
 
 
 def load_captures(
-    db_path: Path, fqdns: Sequence[str], backend: str | None = None
+    db_path: Path,
+    fqdns: Sequence[str],
+    backend: str | None = None,
+    model: str | None = None,
 ) -> dict[str, StoredCapture]:
     """The most recent Capture per hostname, with its Verdict when one exists.
 
@@ -52,26 +55,53 @@ def load_captures(
                    (SELECT v.label FROM verdicts v
                      WHERE v.capture_id = c.capture_id
                        AND (? IS NULL OR v.backend = ?)
+                       AND (? IS NULL OR v.model = ?)
                        AND v.label <> 'error'
                      ORDER BY v.verdict_id DESC LIMIT 1),
                    (SELECT v.brand_impersonated FROM verdicts v
                      WHERE v.capture_id = c.capture_id
                        AND (? IS NULL OR v.backend = ?)
+                       AND (? IS NULL OR v.model = ?)
                        AND v.label <> 'error'
                      ORDER BY v.verdict_id DESC LIMIT 1),
                    (SELECT coalesce(v.latency_ms, 0) FROM verdicts v
                      WHERE v.capture_id = c.capture_id AND v.label <> 'error'
+                       AND (? IS NULL OR v.backend = ?) AND (? IS NULL OR v.model = ?)
                      ORDER BY v.verdict_id DESC LIMIT 1),
                    (SELECT coalesce(v.prompt_tokens, 0) + coalesce(v.completion_tokens, 0)
                       FROM verdicts v
                      WHERE v.capture_id = c.capture_id AND v.label <> 'error'
+                       AND (? IS NULL OR v.backend = ?) AND (? IS NULL OR v.model = ?)
                      ORDER BY v.verdict_id DESC LIMIT 1),
                    (SELECT coalesce(v.cost_usd, 0) FROM verdicts v
                      WHERE v.capture_id = c.capture_id AND v.label <> 'error'
+                       AND (? IS NULL OR v.backend = ?) AND (? IS NULL OR v.model = ?)
                      ORDER BY v.verdict_id DESC LIMIT 1)
             FROM captures c JOIN latest USING (capture_id)
             """,
-            [list(fqdns), backend, backend, backend, backend],
+            [
+                list(fqdns),
+                backend,
+                backend,
+                model,
+                model,
+                backend,
+                backend,
+                model,
+                model,
+                backend,
+                backend,
+                model,
+                model,
+                backend,
+                backend,
+                model,
+                model,
+                backend,
+                backend,
+                model,
+                model,
+            ],
         ).fetchall()
     return {
         row[0]: StoredCapture(
@@ -96,6 +126,7 @@ def run_evaluation(
     arms: Sequence[str] = (ARM_SCORING_ONLY,),
     db_path: Path | None = None,
     backend: str | None = None,
+    model: str | None = None,
 ) -> EvaluationReport:
     """Evaluate the requested arms over a labelled dataset."""
     unknown = [arm for arm in arms if arm not in KNOWN_ARMS]
@@ -122,7 +153,7 @@ def run_evaluation(
         raise ValueError(f"{ARM_SCORING_PLUS_VLM} needs a database of stored captures")
     if db_path is not None:
         # Screenshots make every arm's mistakes reviewable, not only the VLM's.
-        captures = load_captures(db_path, [s.fqdn for s in sites], backend)
+        captures = load_captures(db_path, [s.fqdn for s in sites], backend, model)
 
     results: dict[str, ArmResult] = {}
     for arm in arms:

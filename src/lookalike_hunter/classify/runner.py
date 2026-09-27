@@ -78,7 +78,7 @@ async def run_classifications(
     min_interval_s: float = 0.0,
     retry_base_delay_s: float = 1.0,
 ) -> ClassifyRunStats:
-    pending = store.pending_classifications(limit, classifier.name)
+    pending = store.pending_classifications(limit, classifier.name, model)
     stats = ClassifyRunStats()
     if not pending:
         log.info("classify.nothing_pending", backend=classifier.name)
