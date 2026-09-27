@@ -4,9 +4,9 @@ Detect brand-impersonating domains (typosquatting, homoglyphs, combosquatting) f
 Certificate Transparency logs as soon as their certificate is issued, then triage them
 with a vision-language model. **Defensive use only.**
 
-> Status: Day 2 of 4 — ingestion, scoring, passive capture and VLM classification.
-> Evaluation and the dashboard follow. See `CONTEXT.md` for the domain vocabulary
-> (Candidate, Match, Alert, Verdict…).
+> Status: Day 3 of 4 — ingestion, scoring, passive capture, VLM classification and a
+> measured evaluation. Alerting and the dashboard follow. See `CONTEXT.md` for the
+> domain vocabulary (Candidate, Match, Alert, Verdict…).
 
 ```
 CT logs ──► scoring ──► Alerts ──► headless capture ──► VLM ──► Verdicts
@@ -128,14 +128,96 @@ Confusable collapsing comes in two levels. Rules that *create* letters (`i`/`l`,
 any word ending in `l` followed by `cloud` read as `icloud`. Unambiguous confusables
 (Cyrillic `а`, `1` -> `l`) are safe anywhere in a name.
 
+## Measured results
+
+Evaluated on 78 labelled sites (64 judgeable; 14 excluded as unknown, being
+Cloudflare challenges or empty frames). Dataset and labels are in
+`datasets/eval.jsonl`; regenerate with `lookalike-hunter evaluate`.
+
+| | Scoring only | Scoring + VLM |
+|---|---|---|
+| Sites judged | 64 | 39 (25 excluded, no usable capture) |
+| Accuracy | 9.4% | **61.5%** |
+| Macro F1 | 0.081 | **0.326** |
+| `parked` precision | 0.00 | **0.90** |
+| `parked` recall | 0.00 | 0.69 |
+| `legitimate` precision | 0.10 | 0.60 |
+
+**What this says.** The name-based filter alone is close to useless for triage: 58
+of its 64 judgements are wrong, and almost everything it alerts on turns out to be
+a parking page. It *cannot* do better by construction, because a parked lookalike
+and a live phishing page have identical names. Looking at the screenshot is what
+separates them, and it does so with 90% precision on the parked class. That is the
+entire argument for the vision step, and it is the number that supports it.
+
+**What this does not say.** Phishing recall for the VLM arm is unmeasured: every
+phishing site in the dataset was taken down before it could be captured, so that
+arm has zero phishing support. The comparison above is about suppressing false
+alarms, not about catching attacks.
+
+### Models
+
+Same sites, same captures, same labels; only the model changes.
+
+| Model | Judged | Accuracy | Macro F1 | ms/site | Tokens |
+|---|---:|---:|---:|---:|---:|
+| `ministral-3b-latest` | 39 | 46.2% | 0.270 | 1035 | 73002 |
+| `ministral-8b-latest` | 39 | **61.5%** | **0.326** | 1386 | 72576 |
+| `ministral-14b-latest` | 39 | 56.4% | 0.324 | 2418 | 11375 |
+
+The 8b model is both more accurate and faster than the 14b here, so the default
+should not simply be the largest available model. Cost is $0 on the free tier;
+prices are configurable so a paid run reports a real figure instead of implying one.
+
+### The alert threshold
+
+The configured 0.7 was chosen by eye on one sample. Measured, it is not the best
+value on this dataset:
+
+| Threshold | Alerts | Precision | Recall | F1 |
+|---:|---:|---:|---:|---:|
+| 0.40 | 40 | 0.175 | 0.280 | **0.215** |
+| 0.70 (configured) | 35 | 0.086 | 0.120 | 0.100 |
+| 0.80 | 25 | 0.000 | 0.000 | 0.000 |
+
+Every value is poor, because this dataset is deliberately hostile: most phishing in
+it is hosted on `github.io`, `pages.dev` or S3, where the hostname carries no brand
+lookalike at all and no threshold can help. The honest conclusion is that the
+threshold is the wrong knob for that failure, not that 0.4 is a good setting.
+
+## Honesty about the benchmark
+
+- **The labels were assigned by the same agent that wrote the system.** That is
+  recorded per entry (`labelled_by`, `label_basis`) rather than left implicit. A
+  benchmark whose ground truth comes from the author of the system under test
+  deserves the caveat in the open; `docs/labelling-protocol.md` states the rules
+  used, so the labels can be audited or redone.
+- **Two labels changed once the final URL was read.** `isupport-appie-mxn.com`
+  renders a pixel-perfect iCloud sign-in page and redirects to Apple's real site;
+  `imprentamorales.maicrosoft.eu` shows a password form on a Microsoft typosquat and
+  is a Spanish printer's own ERP. Both are legitimate; both look like phishing in a
+  screenshot.
+- **The dataset is small and hostile**, drawn from what this pipeline actually meets
+  plus seeded hard negatives. It is not a general phishing benchmark.
+- **Feed-sourced phishing labels rest on the feed listing**, not on a screenshot,
+  because the sites were gone before capture. `label_basis` marks those entries.
+
 ## Known limitations
 
-Names alone cannot settle every case; these are what the Day 2 vision model is for:
+Names alone cannot settle every case, which the measurement confirms:
 
 - Legitimate domains that are genuine dnstwist variants, e.g. `livee.com` (a variant
-  of Microsoft's `live.com`) or `hicloud.net` (Huawei), score as known Variants.
+  of Microsoft's `live.com`) or `hicloud.net`, score as known Variants.
 - Surnames and words that collide with short brand tokens, e.g. `amell.family`.
-- Brand-owned infrastructure that looks like combosquatting, e.g. `microsoft-falcon.net`.
+- Brand-owned infrastructure that looks like combosquatting, e.g.
+  `microsoft-falcon.net` and `webshell.dodsuite.office365.us`, which is Microsoft's
+  own US-government cloud.
+- **Phishing hosted on a legitimate platform is invisible to name-based scoring.**
+  Most live phishing in the evaluation sat on `github.io`, `pages.dev` or S3, whose
+  hostnames contain no lookalike and which are partly on the brands' own allowlists.
+  No threshold reaches them; a different signal would be needed.
+- **Phishing sites disappear fast.** Of 34 feed-sourced sites, 25 were already taken
+  down when captured, which is why the vision arm has no phishing support.
 
 Operationally: about 2% of certificates are skipped when the local CT server outruns
 the consumer. Ctrl+C and SIGTERM (as sent by `docker stop`) both flush buffered
