@@ -262,3 +262,18 @@ def test_report_renders_sweep_and_brands(tmp_path: Path, scorer: Scorer) -> None
     assert "Per brand" in markdown
     assert "configured" in markdown
     assert "Phishing judged harmless" in markdown
+
+
+def test_per_source_split(scorer: Scorer) -> None:
+    """CT alerts and feed URLs are different populations and must not be averaged."""
+    arm = run_evaluation(DATASET, scorer, alert_threshold=0.7).arms[ARM_SCORING_ONLY]
+
+    assert "fixture" in arm.per_source
+    assert sum(m.total for m in arm.per_source.values()) == arm.metrics.total
+
+
+def test_report_renders_the_source_split(scorer: Scorer) -> None:
+    markdown = run_evaluation(DATASET, scorer, alert_threshold=0.7).to_markdown()
+
+    assert "Per source" in markdown
+    assert "never shows a page hosted on github.io" in markdown

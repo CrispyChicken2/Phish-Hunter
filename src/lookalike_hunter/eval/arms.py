@@ -10,7 +10,7 @@ denominator, and the sites excluded from an arm are counted rather than dropped.
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -105,12 +105,29 @@ def cost_of(fqdns: Sequence[str], captures: dict[str, StoredCapture]) -> ArmCost
     )
 
 
-def per_brand_metrics(predictions: Sequence[Prediction]) -> dict[str, Metrics]:
-    """Metrics split by Brand, which is where short-token weakness would show."""
+def _split_metrics(
+    predictions: Sequence[Prediction], key: Callable[[Prediction], str]
+) -> dict[str, Metrics]:
     grouped: dict[str, list[tuple[str, str]]] = defaultdict(list)
     for prediction in predictions:
-        grouped[prediction.brand or "(none)"].append((prediction.expected, prediction.predicted))
-    return {brand: compute_metrics(pairs) for brand, pairs in sorted(grouped.items())}
+        grouped[key(prediction)].append((prediction.expected, prediction.predicted))
+    return {name: compute_metrics(pairs) for name, pairs in sorted(grouped.items())}
+
+
+def per_brand_metrics(predictions: Sequence[Prediction]) -> dict[str, Metrics]:
+    """Metrics split by Brand, which is where short-token weakness would show."""
+    return _split_metrics(predictions, lambda p: p.brand or "(none)")
+
+
+def per_source_metrics(predictions: Sequence[Prediction]) -> dict[str, Metrics]:
+    """Metrics split by where the site came from.
+
+    Certificate Transparency and a phishing feed are different populations. CT
+    shows certificates, so a page on github.io or S3 never appears in it at all;
+    feed entries are mostly exactly that. A single average over both says more
+    about the mixture than about the system.
+    """
+    return _split_metrics(predictions, lambda p: p.source or "(unknown)")
 
 
 def scoring_only_arm(
@@ -134,6 +151,7 @@ def scoring_only_arm(
                 brand=brand or site.brand,
                 note=site.note,
                 screenshot=str(capture.screenshot_path) if capture else None,
+                source=site.source,
             )
         )
     return ArmResult(
@@ -144,6 +162,7 @@ def scoring_only_arm(
         evaluated=len(predictions),
         excluded=0,
         per_brand=per_brand_metrics(predictions),
+        per_source=per_source_metrics(predictions),
         # The sweep belongs to the arm whose behaviour the threshold governs.
         sweep=sweep_thresholds([(p.expected, p.score) for p in predictions], alert_threshold),
         # Names only: no page fetched, no model called, nothing billed.
@@ -189,6 +208,7 @@ def scoring_plus_vlm_arm(
                 note=site.note,
                 screenshot=str(capture.screenshot_path) if capture.screenshot_path else None,
                 verdict_brand=capture.verdict_brand,
+                source=site.source,
             )
         )
 
@@ -201,5 +221,6 @@ def scoring_plus_vlm_arm(
         excluded=len(excluded),
         excluded_sites=excluded,
         per_brand=per_brand_metrics(predictions),
+        per_source=per_source_metrics(predictions),
         cost=cost_of([p.fqdn for p in predictions], captures),
     )

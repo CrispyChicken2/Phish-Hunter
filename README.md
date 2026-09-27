@@ -157,6 +157,30 @@ phishing site in the dataset was taken down before it could be captured, so that
 arm has zero phishing support. The comparison above is about suppressing false
 alarms, not about catching attacks.
 
+### By population
+
+The aggregate above mixes two different populations, which flatters neither arm.
+Split by where each site came from:
+
+| Source | Sites | Scoring only | Scoring + VLM |
+|---|---:|---:|---:|
+| Certificate Transparency alerts | 30 | **0.0%** | **63.3%** |
+| Seeded hard negatives | 7 | 14.3% | 42.9% |
+| Phishing feed | 27 (2 reachable) | 18.5% | 100% |
+
+The first row is the one that matters, because it is what this pipeline actually
+produces. Of the 30 sites it alerted on, **not one was phishing**: they were
+parking pages, brand-owned infrastructure and unrelated businesses. Name-based
+scoring is therefore 0% accurate on its own output, and looking at the page
+recovers 63%.
+
+The feed row is the structural blind spot. Certificate Transparency publishes
+certificates, and a phishing page on `github.io`, `pages.dev` or an S3 bucket
+never gets one of its own: it is covered by the platform's wildcard. Those sites
+cannot appear in this pipeline's input at all, so no threshold, scoring rule or
+model reaches them. Catching them would need a second ingestion source, which is
+a different tool rather than a tuning change.
+
 ### Models
 
 Same sites, same captures, same labels; only the model changes.

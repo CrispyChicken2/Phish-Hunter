@@ -29,6 +29,7 @@ class Prediction:
     brand: str | None = None
     note: str | None = None
     screenshot: str | None = None
+    source: str | None = None
     # A Verdict naming an impersonated Brand while calling the page something other
     # than phishing: an internal contradiction seen in live output, counted here.
     verdict_brand: str | None = None
@@ -50,6 +51,9 @@ class ArmResult:
     excluded: int = 0
     excluded_sites: list[str] = field(default_factory=list)
     per_brand: dict[str, Metrics] = field(default_factory=dict)
+    # CT alerts and feed URLs are different populations; averaging them into one
+    # number hides that the pipeline is blind to one of them by construction.
+    per_source: dict[str, Metrics] = field(default_factory=dict)
     sweep: ThresholdSweep | None = None
     cost: ArmCost | None = None
 
@@ -130,6 +134,23 @@ class EvaluationReport:
                     f"- Per site: {spend.ms_per_site:.0f} ms, "
                     f"${spend.usd_per_1000_sites:.4f} per 1000 sites",
                 ]
+
+            if arm.per_source:
+                lines += [
+                    "",
+                    "### Per source",
+                    "",
+                    "Different populations: Certificate Transparency never shows a page "
+                    "hosted on github.io or S3, so feed entries are largely invisible to "
+                    "name-based scoring by construction.",
+                    "",
+                    "| Source | Sites | Accuracy | Macro F1 |",
+                    "|---|---:|---:|---:|",
+                ]
+                for source, sm in sorted(arm.per_source.items()):
+                    lines.append(
+                        f"| {source} | {sm.total} | {sm.accuracy:.2%} | {sm.macro_f1:.4f} |"
+                    )
 
             if arm.per_brand:
                 lines += [
