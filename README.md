@@ -255,6 +255,10 @@ Names alone cannot settle every case, which the measurement confirms:
   No threshold reaches them; a different signal would be needed.
 - **Phishing sites disappear fast.** Of 34 feed-sourced sites, 25 were already taken
   down when captured, which is why the vision arm has no phishing support.
+- **A stored Match keeps its first score.** After the scoring weights change, rows
+  written earlier are not rescored, so `alerts` can show figures the current
+  configuration would not produce. The evaluation is unaffected: it rescores from
+  the hostname rather than reading those rows.
 
 Operationally: about 2% of certificates are skipped when the local CT server outruns
 the consumer. Ctrl+C and SIGTERM (as sent by `docker stop`) both flush buffered

@@ -117,6 +117,11 @@ CREATE TABLE IF NOT EXISTS certificates (
 );
 
 -- One row per (Candidate, Brand); the first sighting wins.
+--
+-- Consequence worth knowing: a stored score is never updated. After the scoring
+-- weights change, rows written earlier keep their old score, so `alerts` can show
+-- figures the current configuration would not produce. Evaluation is unaffected,
+-- because it re-scores from the hostname rather than reading these rows.
 CREATE TABLE IF NOT EXISTS matches (
     fqdn               VARCHAR NOT NULL,
     brand              VARCHAR NOT NULL,
@@ -231,7 +236,13 @@ class MatchStore:
             _widen_verdict_uniqueness(con)
 
     def write(self, rows: Sequence[tuple[Certificate, Match]]) -> int:
-        """Persist Matches and their Certificates; returns the number of new Matches."""
+        """Persist Matches and their Certificates; returns the number of new Matches.
+
+        Conflicts are skipped rather than overwritten, and the count returned tells
+        the caller how many rows were actually new. Certificates dedupe on their
+        own hash, so a skipped one carries identical content; Matches keep their
+        first score (see the schema note).
+        """
         if not rows:
             return 0
         # A precert and its final cert often land in the same batch: keep the first.
