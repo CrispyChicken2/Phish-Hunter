@@ -78,7 +78,9 @@ to every model on the account, so the model is chosen by name per request.
 Not every listed model is usable: on the free tier the `ministral-*` family answers
 normally (3b: 750 req/min, 8b: 188, 14b: 30) while `mistral-small`/`mistral-medium`
 return 429 with `x-ratelimit-limit-req-minute: 0` until pay-as-you-go is enabled.
-The default is `ministral-14b-latest`, the most capable free vision model.
+The default is `ministral-8b-latest`: it measured both more accurate and faster
+than the 14b on this dataset (see Measured results), so the default is the one
+that scored best, not the largest.
 
 The `stub` backend classifies from DOM signals alone, needs no key, and is the
 baseline the VLM is compared against on Day 3.

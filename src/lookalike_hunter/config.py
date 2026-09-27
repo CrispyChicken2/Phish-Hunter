@@ -104,8 +104,10 @@ class ClassifyConfig(BaseModel):
     # Pixtral is no longer served by the API. The ministral family is vision
     # capable and included in the free tier, while mistral-small/medium answer
     # 429 with a limit of 0 until pay-as-you-go is enabled.
+    # 8b rather than 14b: it measured more accurate and faster on the evaluation
+    # dataset, so the default follows the measurement rather than the size.
     # `lookalike-hunter models` lists what a given key can call.
-    model: str = "ministral-14b-latest"
+    model: str = "ministral-8b-latest"
     api_base: str = "https://api.mistral.ai/v1"
     ollama_base: str = "http://localhost:11434"
     timeout_s: float = 90.0
