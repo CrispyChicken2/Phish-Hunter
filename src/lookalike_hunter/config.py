@@ -115,6 +115,10 @@ class ClassifyConfig(BaseModel):
     # Free API tiers rate-limit aggressively; pace calls instead of burning retries.
     min_interval_s: float = 2.0
     retry_base_delay_s: float = 3.0
+    # USD per 1000 tokens. Zero on the free tier; set them to price a paid run
+    # rather than have the report imply a cost nobody checked.
+    cost_per_1k_prompt_usd: float = 0.0
+    cost_per_1k_completion_usd: float = 0.0
 
 
 class Settings(BaseSettings):

@@ -23,6 +23,20 @@ class Label(StrEnum):
     UNKNOWN = "unknown"
 
 
+class TokenUsage(BaseModel):
+    """What one classification consumed.
+
+    Cost is computed from configured prices rather than guessed: the current tier
+    is free, so it is zero, but the field has to exist for the arms to be compared
+    on cost as well as accuracy.
+    """
+
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+    cost_usd: float = 0.0
+
+
 class Verdict(BaseModel):
     """Structured classification of one captured page."""
 
@@ -30,6 +44,8 @@ class Verdict(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
     brand_impersonated: str | None = None
     evidence: str = Field(max_length=1000)
+    # Filled in by the backend after parsing; never part of the model's own JSON.
+    usage: TokenUsage | None = None
 
     @field_validator("brand_impersonated", mode="before")
     @classmethod

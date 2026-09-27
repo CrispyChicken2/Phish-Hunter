@@ -163,3 +163,50 @@ async def test_rate_limit_error_reports_the_quota_headers(screenshot: Path) -> N
 
     assert "x-ratelimit-limit-req-minute" in str(excinfo.value)
     assert excinfo.value.retry_after_s == 7.0
+
+
+async def test_token_usage_and_cost_are_recorded(screenshot: Path) -> None:
+    payload = {
+        "choices": [
+            {
+                "message": {
+                    "content": '{"label": "parked", "confidence": 0.8, "evidence": "For sale."}'
+                }
+            }
+        ],
+        "usage": {"prompt_tokens": 1200, "completion_tokens": 40, "total_tokens": 1240},
+    }
+    classifier = MistralClassifier(
+        "key",
+        "m",
+        client=client_returning(httpx.Response(200, json=payload)),
+        cost_per_1k_prompt_usd=0.10,
+        cost_per_1k_completion_usd=0.30,
+    )
+
+    verdict = await classifier.classify(make_item(screenshot))
+
+    assert verdict.usage is not None
+    assert verdict.usage.prompt_tokens == 1200
+    assert verdict.usage.total_tokens == 1240
+    # 1.2 * 0.10 + 0.04 * 0.30
+    assert verdict.usage.cost_usd == round(1.2 * 0.10 + 0.04 * 0.30, 6)
+
+
+async def test_usage_absent_from_the_response_stays_zero(screenshot: Path) -> None:
+    """A backend that reports nothing must not have numbers invented for it."""
+    reply_without_usage = httpx.Response(
+        200,
+        json={
+            "choices": [
+                {"message": {"content": '{"label": "parked", "confidence": 0.5, "evidence": "x"}'}}
+            ]
+        },
+    )
+    classifier = MistralClassifier("key", "m", client=client_returning(reply_without_usage))
+
+    verdict = await classifier.classify(make_item(screenshot))
+
+    assert verdict.usage is not None
+    assert verdict.usage.total_tokens == 0
+    assert verdict.usage.cost_usd == 0.0

@@ -11,9 +11,13 @@ import json
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from lookalike_hunter.eval.metrics import Metrics
 from lookalike_hunter.eval.sweep import ThresholdSweep
+
+if TYPE_CHECKING:  # avoids a cycle: arms imports report
+    from lookalike_hunter.eval.arms import ArmCost
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +51,7 @@ class ArmResult:
     excluded_sites: list[str] = field(default_factory=list)
     per_brand: dict[str, Metrics] = field(default_factory=dict)
     sweep: ThresholdSweep | None = None
+    cost: ArmCost | None = None
 
     @property
     def mistakes(self) -> list[Prediction]:
@@ -113,6 +118,18 @@ class EvaluationReport:
             for expected in labels:
                 row = " | ".join(str(m.confusion[expected][p]) for p in labels)
                 lines.append(f"| **{expected}** | {row} |")
+
+            if arm.cost is not None:
+                spend = arm.cost
+                lines += [
+                    "",
+                    "### Cost",
+                    "",
+                    f"- Capture: {spend.capture_ms / 1000:.1f}s total",
+                    f"- Classify: {spend.classify_ms / 1000:.1f}s total, {spend.tokens} tokens",
+                    f"- Per site: {spend.ms_per_site:.0f} ms, "
+                    f"${spend.usd_per_1000_sites:.4f} per 1000 sites",
+                ]
 
             if arm.per_brand:
                 lines += [

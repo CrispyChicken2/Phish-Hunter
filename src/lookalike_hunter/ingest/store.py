@@ -161,10 +161,21 @@ CREATE TABLE IF NOT EXISTS verdicts (
     evidence            VARCHAR,
     classified_at       TIMESTAMPTZ NOT NULL,
     latency_ms          BIGINT,
+    prompt_tokens       BIGINT,
+    completion_tokens   BIGINT,
+    cost_usd            DOUBLE,
     error               VARCHAR,
     UNIQUE (capture_id, backend)
 );
 """
+
+
+# Columns added after the first release, applied to existing databases on open.
+MIGRATIONS: tuple[tuple[str, str], ...] = (
+    ("prompt_tokens", "BIGINT"),
+    ("completion_tokens", "BIGINT"),
+    ("cost_usd", "DOUBLE"),
+)
 
 
 class MatchStore:
@@ -174,6 +185,10 @@ class MatchStore:
         db_path.parent.mkdir(parents=True, exist_ok=True)
         with connect_with_retry(db_path) as con:
             con.execute(SCHEMA)
+            # CREATE TABLE IF NOT EXISTS leaves an older database without the newer
+            # columns, so a running install would break on the next write.
+            for column, sql_type in MIGRATIONS:
+                con.execute(f"ALTER TABLE verdicts ADD COLUMN IF NOT EXISTS {column} {sql_type}")
 
     def write(self, rows: Sequence[tuple[Certificate, Match]]) -> int:
         """Persist Matches and their Certificates; returns the number of new Matches."""
@@ -335,13 +350,15 @@ class MatchStore:
         error: str | None = None,
     ) -> None:
         """Store a verdict, or a failure row so the capture is not retried forever."""
+        usage = verdict.usage if verdict else None
         with connect_with_retry(self.db_path) as con:
             con.execute(
                 """
                 INSERT INTO verdicts
                     (capture_id, fqdn, backend, model, label, confidence, brand_impersonated,
-                     evidence, classified_at, latency_ms, error)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     evidence, classified_at, latency_ms, prompt_tokens, completion_tokens,
+                     cost_usd, error)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT DO NOTHING
                 """,
                 [
@@ -355,9 +372,34 @@ class MatchStore:
                     verdict.evidence if verdict else None,
                     classified_at,
                     latency_ms,
+                    usage.prompt_tokens if usage else None,
+                    usage.completion_tokens if usage else None,
+                    usage.cost_usd if usage else None,
                     error,
                 ],
             )
+
+    def clear_verdicts(
+        self, backend: str, model: str | None = None, limit: int | None = None
+    ) -> int:
+        """Drop stored verdicts so their captures are classified again.
+
+        Used to measure a prompt or model change against the same sites; without
+        it a rerun would silently reuse the answers the change was meant to alter.
+        """
+        with connect_with_retry(self.db_path) as con:
+            rows = con.execute(
+                """
+                SELECT verdict_id FROM verdicts
+                WHERE backend = ? AND (? IS NULL OR model = ?)
+                ORDER BY verdict_id DESC LIMIT ?
+                """,
+                [backend, model, model, limit if limit is not None else 1_000_000],
+            ).fetchall()
+            ids = [row[0] for row in rows]
+            if ids:
+                con.execute("DELETE FROM verdicts WHERE verdict_id IN (SELECT unnest(?))", [ids])
+        return len(ids)
 
     def clear_failed_verdicts(self, backend: str) -> int:
         """Drop error rows so their captures are classified again."""

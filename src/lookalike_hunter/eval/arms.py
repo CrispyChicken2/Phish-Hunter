@@ -47,6 +47,10 @@ class StoredCapture:
     verdict_label: str | None = None
     screenshot_path: Path | None = None
     verdict_brand: str | None = None
+    capture_ms: int = 0
+    classify_ms: int = 0
+    tokens: int = 0
+    cost_usd: float = 0.0
 
     @property
     def reachable(self) -> bool:
@@ -64,6 +68,41 @@ def score_of(scorer: Scorer, fqdn: str) -> tuple[float, str | None]:
         return 0.0, None
     best = max(matches, key=lambda m: m.score)
     return best.score, best.brand
+
+
+@dataclass(frozen=True, slots=True)
+class ArmCost:
+    """What an arm spent to reach its verdicts.
+
+    Accuracy alone cannot decide whether the vision step earns its place; the
+    comparison needs the price next to the benefit.
+    """
+
+    capture_ms: int = 0
+    classify_ms: int = 0
+    tokens: int = 0
+    cost_usd: float = 0.0
+    sites: int = 0
+
+    @property
+    def ms_per_site(self) -> float:
+        return round((self.capture_ms + self.classify_ms) / self.sites, 1) if self.sites else 0.0
+
+    @property
+    def usd_per_1000_sites(self) -> float:
+        return round(self.cost_usd / self.sites * 1000, 4) if self.sites else 0.0
+
+
+def cost_of(fqdns: Sequence[str], captures: dict[str, StoredCapture]) -> ArmCost:
+    """Sum what the pipeline actually spent on these sites."""
+    used = [captures[f] for f in fqdns if f in captures]
+    return ArmCost(
+        capture_ms=sum(c.capture_ms for c in used),
+        classify_ms=sum(c.classify_ms for c in used),
+        tokens=sum(c.tokens for c in used),
+        cost_usd=round(sum(c.cost_usd for c in used), 6),
+        sites=len(fqdns),
+    )
 
 
 def per_brand_metrics(predictions: Sequence[Prediction]) -> dict[str, Metrics]:
@@ -107,6 +146,8 @@ def scoring_only_arm(
         per_brand=per_brand_metrics(predictions),
         # The sweep belongs to the arm whose behaviour the threshold governs.
         sweep=sweep_thresholds([(p.expected, p.score) for p in predictions], alert_threshold),
+        # Names only: no page fetched, no model called, nothing billed.
+        cost=ArmCost(sites=len(predictions)),
     )
 
 
@@ -160,4 +201,5 @@ def scoring_plus_vlm_arm(
         excluded=len(excluded),
         excluded_sites=excluded,
         per_brand=per_brand_metrics(predictions),
+        cost=cost_of([p.fqdn for p in predictions], captures),
     )

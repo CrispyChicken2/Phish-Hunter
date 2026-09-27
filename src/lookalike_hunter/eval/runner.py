@@ -48,7 +48,7 @@ def load_captures(
                 SELECT fqdn, max(capture_id) AS capture_id
                 FROM captures WHERE fqdn IN (SELECT unnest(?)) GROUP BY fqdn
             )
-            SELECT c.fqdn, c.status, c.screenshot_path,
+            SELECT c.fqdn, c.status, c.screenshot_path, c.duration_ms,
                    (SELECT v.label FROM verdicts v
                      WHERE v.capture_id = c.capture_id
                        AND (? IS NULL OR v.backend = ?)
@@ -58,20 +58,34 @@ def load_captures(
                      WHERE v.capture_id = c.capture_id
                        AND (? IS NULL OR v.backend = ?)
                        AND v.label <> 'error'
+                     ORDER BY v.verdict_id DESC LIMIT 1),
+                   (SELECT coalesce(v.latency_ms, 0) FROM verdicts v
+                     WHERE v.capture_id = c.capture_id AND v.label <> 'error'
+                     ORDER BY v.verdict_id DESC LIMIT 1),
+                   (SELECT coalesce(v.prompt_tokens, 0) + coalesce(v.completion_tokens, 0)
+                      FROM verdicts v
+                     WHERE v.capture_id = c.capture_id AND v.label <> 'error'
+                     ORDER BY v.verdict_id DESC LIMIT 1),
+                   (SELECT coalesce(v.cost_usd, 0) FROM verdicts v
+                     WHERE v.capture_id = c.capture_id AND v.label <> 'error'
                      ORDER BY v.verdict_id DESC LIMIT 1)
             FROM captures c JOIN latest USING (capture_id)
             """,
             [list(fqdns), backend, backend, backend, backend],
         ).fetchall()
     return {
-        fqdn: StoredCapture(
-            fqdn=fqdn,
-            status=status,
-            verdict_label=verdict,
-            screenshot_path=Path(shot) if shot else None,
-            verdict_brand=verdict_brand,
+        row[0]: StoredCapture(
+            fqdn=row[0],
+            status=row[1],
+            screenshot_path=Path(row[2]) if row[2] else None,
+            capture_ms=int(row[3] or 0),
+            verdict_label=row[4],
+            verdict_brand=row[5],
+            classify_ms=int(row[6] or 0),
+            tokens=int(row[7] or 0),
+            cost_usd=float(row[8] or 0.0),
         )
-        for fqdn, status, shot, verdict, verdict_brand in rows
+        for row in rows
     }
 
 

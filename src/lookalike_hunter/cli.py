@@ -116,6 +116,8 @@ def _build_classifier(settings: Settings) -> tuple[Classifier, str | None]:
                 settings.classify.model,
                 settings.classify.api_base,
                 settings.classify.timeout_s,
+                cost_per_1k_prompt_usd=settings.classify.cost_per_1k_prompt_usd,
+                cost_per_1k_completion_usd=settings.classify.cost_per_1k_completion_usd,
             ),
             settings.classify.model,
         )
@@ -128,6 +130,9 @@ def cmd_classify(settings: Settings, args: argparse.Namespace) -> None:
     if args.retry_failed:
         cleared = store.clear_failed_verdicts(classifier.name)
         log.info("classify.retry_failed", cleared=cleared)
+    if args.force:
+        cleared = store.clear_verdicts(classifier.name, model, args.limit)
+        log.info("classify.force", cleared=cleared, model=model)
     with contextlib.suppress(KeyboardInterrupt):
         stats = asyncio.run(
             run_classifications(
@@ -303,6 +308,11 @@ def main(argv: list[str] | None = None) -> None:
     classify.add_argument("--limit", type=int, default=None)
     classify.add_argument(
         "--retry-failed", action="store_true", help="Re-classify captures that errored"
+    )
+    classify.add_argument(
+        "--force",
+        action="store_true",
+        help="Discard stored verdicts first, to measure a prompt or model change",
     )
     classify.set_defaults(func=cmd_classify)
 
