@@ -124,6 +124,18 @@ class ClassifyConfig(BaseModel):
     cost_per_1k_completion_usd: float = 0.0
 
 
+class AlertConfig(BaseModel):
+    """What is worth telling a human about, and where to send it."""
+
+    # Only phishing by default: the measurement showed most Alerts are parking
+    # pages, and a queue full of those is the noise this project exists to remove.
+    labels: list[str] = Field(default_factory=lambda: ["phishing"])
+    min_confidence: float = 0.6
+    file_path: Path | None = Path("data/alerts.jsonl")
+    webhook_url: str | None = None
+    max_per_run: int = 50
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="LH_",
@@ -145,6 +157,7 @@ class Settings(BaseSettings):
     variants: VariantsConfig = Field(default_factory=VariantsConfig)
     capture: CaptureConfig = Field(default_factory=CaptureConfig)
     classify: ClassifyConfig = Field(default_factory=ClassifyConfig)
+    alert: AlertConfig = Field(default_factory=AlertConfig)
     brands: list[BrandConfig] = Field(default_factory=list)
 
     @classmethod

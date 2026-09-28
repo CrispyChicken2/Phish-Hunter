@@ -27,6 +27,15 @@ scoring:
      compte, connexion, remboursement, securite, carte, vitale, espace, assure]
   free_dv_issuers: ["Let's Encrypt", ZeroSSL, Google Trust Services, cPanel]
 
+alert:
+  # Only phishing verdicts are announced; parked lookalikes are the noise.
+  labels: [phishing]
+  min_confidence: 0.6
+  file_path: data/alerts.jsonl
+  # Any JSON webhook: Slack, Discord, Teams. Leave empty to write only the file.
+  webhook_url: null
+  max_per_run: 50
+
 brands:
   - name: paypal
     tokens: [paypal]
