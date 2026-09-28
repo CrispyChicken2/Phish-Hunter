@@ -9,6 +9,7 @@ import re
 import signal
 from pathlib import Path
 
+from lookalike_hunter.alert.runner import build_sinks, run_alerts
 from lookalike_hunter.capture.runner import run_captures
 from lookalike_hunter.classify.base import Classifier, StubClassifier
 from lookalike_hunter.classify.mistral import MistralClassifier, list_vision_models
@@ -282,6 +283,25 @@ def cmd_evaluate(settings: Settings, args: argparse.Namespace) -> None:
     print(f"\nreport: {markdown_path}\n        {json_path}")
 
 
+def cmd_alert(settings: Settings, args: argparse.Namespace) -> None:
+    """Notify about new findings that meet the alert policy."""
+    store = MatchStore(settings.db_path, settings.scoring.alert_threshold)
+    sinks = build_sinks(
+        args.file or settings.alert.file_path, args.webhook or settings.alert.webhook_url
+    )
+    stats = run_alerts(
+        store,
+        sinks,
+        settings.alert.min_confidence,
+        args.limit or settings.alert.max_per_run,
+        tuple(settings.alert.labels),
+    )
+    print(
+        f"{stats.sent} notification(s) sent from {stats.considered} candidate(s)"
+        + (f", {stats.failed} delivery failure(s)" if stats.failed else "")
+    )
+
+
 def cmd_verdicts(settings: Settings, args: argparse.Namespace) -> None:
     """Print the latest verdicts with the screenshot that backs each one."""
     with connect_with_retry(settings.db_path, read_only=True) as con:
@@ -390,6 +410,12 @@ def main(argv: list[str] | None = None) -> None:
     compare.add_argument("--models", nargs="+", required=True)
     compare.add_argument("--backend", default="mistral")
     compare.set_defaults(func=cmd_compare_models)
+
+    alert = sub.add_parser("alert", help="Notify about new phishing verdicts")
+    alert.add_argument("--limit", type=int, default=None)
+    alert.add_argument("--file", type=Path, default=None, help="Override the JSONL sink path")
+    alert.add_argument("--webhook", default=None, help="Override the webhook URL")
+    alert.set_defaults(func=cmd_alert)
 
     verdicts = sub.add_parser("verdicts", help="List recent verdicts with their evidence")
     verdicts.add_argument("--limit", type=int, default=20)

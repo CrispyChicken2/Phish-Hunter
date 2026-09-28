@@ -93,6 +93,22 @@ class PendingCapture:
 
 
 @dataclass(frozen=True, slots=True)
+class PendingAlert:
+    """A Verdict that meets the alert policy and has not been announced yet."""
+
+    verdict_id: int
+    fqdn: str
+    label: str
+    confidence: float
+    score: float
+    brand: str | None
+    evidence: str | None
+    screenshot_path: str | None
+    final_url: str | None
+    classified_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
 class PendingClassification:
     """A stored capture awaiting a verdict."""
 
@@ -175,6 +191,7 @@ CREATE TABLE IF NOT EXISTS verdicts (
     completion_tokens   BIGINT,
     cost_usd            DOUBLE,
     error               VARCHAR,
+    alerted_at          TIMESTAMPTZ,
     UNIQUE (capture_id, backend, model)
 );
 """
@@ -185,6 +202,7 @@ MIGRATIONS: tuple[tuple[str, str], ...] = (
     ("prompt_tokens", "BIGINT"),
     ("completion_tokens", "BIGINT"),
     ("cost_usd", "DOUBLE"),
+    ("alerted_at", "TIMESTAMPTZ"),
 )
 
 
@@ -210,10 +228,10 @@ def _widen_verdict_uniqueness(con: duckdb.DuckDBPyConnection) -> None:
         INSERT INTO verdicts
             (verdict_id, capture_id, fqdn, backend, model, label, confidence,
              brand_impersonated, evidence, classified_at, latency_ms, prompt_tokens,
-             completion_tokens, cost_usd, error)
+             completion_tokens, cost_usd, error, alerted_at)
         SELECT verdict_id, capture_id, fqdn, backend, model, label, confidence,
                brand_impersonated, evidence, classified_at, latency_ms, prompt_tokens,
-               completion_tokens, cost_usd, error
+               completion_tokens, cost_usd, error, alerted_at
         FROM verdicts_old
         """
     )
@@ -453,6 +471,35 @@ class MatchStore:
                 reason="a verdict already exists for this capture, backend and model",
             )
         return written
+
+    def pending_alerts(
+        self, labels: Sequence[str], min_confidence: float, limit: int
+    ) -> list[PendingAlert]:
+        """Verdicts matching the policy that nobody has been told about yet."""
+        with connect_with_retry(self.db_path, read_only=True) as con:
+            rows = con.execute(
+                """
+                SELECT v.verdict_id, v.fqdn, v.label, v.confidence,
+                       coalesce((SELECT max(m.score) FROM matches m WHERE m.fqdn = v.fqdn), 0.0),
+                       v.brand_impersonated, v.evidence, c.screenshot_path, c.final_url,
+                       v.classified_at
+                FROM verdicts v JOIN captures c USING (capture_id)
+                WHERE v.alerted_at IS NULL
+                  AND v.label IN (SELECT unnest(?))
+                  AND v.confidence >= ?
+                ORDER BY v.confidence DESC, v.verdict_id DESC
+                LIMIT ?
+                """,
+                [list(labels), min_confidence, limit],
+            ).fetchall()
+        return [PendingAlert(*row) for row in rows]
+
+    def mark_alerted(self, verdict_id: int, when: datetime) -> None:
+        """Record that a finding has been announced, so it is announced once."""
+        with connect_with_retry(self.db_path) as con:
+            con.execute(
+                "UPDATE verdicts SET alerted_at = ? WHERE verdict_id = ?", [when, verdict_id]
+            )
 
     def clear_verdicts(
         self, backend: str, model: str | None = None, limit: int | None = None
