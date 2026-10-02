@@ -15,6 +15,10 @@ from urllib.parse import urlparse
 
 ALLOWED_SCHEMES = frozenset({"http", "https"})
 
+# A page may open these itself. They reach the network just like http(s), so the
+# same host rules apply; they are never used to start a visit.
+WEBSOCKET_SCHEMES = frozenset({"ws", "wss"})
+
 # Encrypted first; the cleartext retry is what catches kits served on port 80.
 DEFAULT_SCHEMES: tuple[str, ...] = ("https", "http")
 
@@ -59,7 +63,7 @@ def is_blocked_url(url: str, *, block_private_networks: bool = True) -> str | No
     scheme = parsed.scheme.lower()
     if scheme in INERT_SCHEMES:
         return None
-    if scheme not in ALLOWED_SCHEMES:
+    if scheme not in ALLOWED_SCHEMES | WEBSOCKET_SCHEMES:
         return f"scheme {scheme or '(none)'} not allowed"
     host = parsed.hostname
     if not host:
