@@ -29,7 +29,7 @@ jobs:
       # script during install; --locked forbids resolving anything the lockfile
       # does not already pin. Our own project is the one source tree that would
       # need building, so it is not installed here: PYTHONPATH covers it instead.
-      - run: uv sync --locked --no-build --no-install-project
+      - run: uv sync --locked --no-build --no-install-project --all-extras
 
       - name: Install Chromium for capture tests
         run: uv run --frozen --no-build --no-sync playwright install --with-deps chromium

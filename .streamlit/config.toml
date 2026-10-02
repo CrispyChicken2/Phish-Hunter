@@ -1,0 +1,21 @@
+# Read by `streamlit run` from the project root (make dashboard).
+
+[server]
+# The dashboard shows live phishing findings and has no login: never listen on
+# the LAN. Streamlit's default is every interface.
+address = "127.0.0.1"
+headless = true
+# Defaults, stated so a change to them is a visible decision.
+enableXsrfProtection = true
+enableCORS = true
+
+[browser]
+# No usage telemetry: what an analyst looks at is nobody else's business.
+gatherUsageStats = false
+serverAddress = "localhost"
+
+[client]
+# Exception type only in the page; the full traceback goes to the console.
+showErrorDetails = "type"
+# Hides the "Deploy" button: one click would offer to publish live findings.
+toolbarMode = "minimal"

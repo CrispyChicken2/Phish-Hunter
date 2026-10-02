@@ -1,7 +1,7 @@
-.PHONY: install lint format typecheck test check ct-up ct-down run replay
+.PHONY: install lint format typecheck test check ct-up ct-down run replay dashboard
 
 install:
-	uv sync
+	uv sync --all-extras
 
 lint:
 	uv run ruff check .
@@ -30,3 +30,7 @@ run:
 
 replay:
 	uv run lookalike-hunter ingest --source replay --replay-path tests/fixtures/certstream_sample.jsonl
+
+# Review UI on http://localhost:8501 only; .streamlit/config.toml keeps it off the LAN.
+dashboard:
+	uv run --extra dashboard streamlit run src/lookalike_hunter/dashboard/app.py

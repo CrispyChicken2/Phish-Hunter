@@ -19,6 +19,11 @@ dependencies = [
     "websockets>=13",
 ]
 
+[project.optional-dependencies]
+# The review UI. Kept out of the default install so the capture image, which
+# runs hostile pages, does not carry a web server and its dependency tree.
+dashboard = ["streamlit>=1.64.0"]
+
 [project.scripts]
 lookalike-hunter = "lookalike_hunter.cli:main"
 
