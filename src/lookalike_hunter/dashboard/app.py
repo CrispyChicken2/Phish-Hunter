@@ -1,0 +1,116 @@
+"""Streamlit review queue: the finding, its evidence and the screenshot behind it.
+
+Run with: make dashboard  (streamlit run src/lookalike_hunter/dashboard/app.py)
+
+Deliberately thin. The querying lives in `data.py` where it is tested; this file
+only arranges what comes back.
+
+Every string shown here came from a hostile page or from a model that read one,
+so it is rendered with ``st.text``, which parses neither Markdown nor HTML.
+Escaping HTML is not enough on its own: ``st.write`` and ``st.caption`` render
+Markdown, so ``[Verify](https://evil)`` would become a live link and
+``![](https://tracker/x)`` would have the analyst's browser fetch a URL the
+attacker controls, telling them someone is looking. Only the label badge, whose
+values come from a fixed set, goes through HTML.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import streamlit as st
+
+from lookalike_hunter.config import load_settings
+from lookalike_hunter.dashboard.data import (
+    Finding,
+    defang,
+    label_counts,
+    load_findings,
+    plain,
+)
+
+LABEL_COLOURS = {
+    "phishing": "#b3261e",
+    "parked": "#6c757d",
+    "legitimate": "#1e7d32",
+    "unreachable": "#8a6d00",
+    "unknown": "#3b4a5a",
+}
+
+
+def render_finding(finding: Finding, captures_dir: Path) -> None:
+    # The label is matched against the fixed set rather than escaped: a value
+    # outside it (a tampered row) is shown as plain text instead of as a badge.
+    colour = LABEL_COLOURS.get(finding.label)
+    if colour is not None:
+        st.markdown(
+            f"<span style='background:{colour};color:#fff;padding:2px 8px;"
+            f"border-radius:4px'>{finding.label}</span> "
+            f"confidence {finding.confidence:.2f} · score {finding.score:.2f}",
+            unsafe_allow_html=True,
+        )
+    else:
+        st.text(f"label: {plain(finding.label, 40)}")
+    st.text(plain(finding.fqdn, 253))
+
+    left, right = st.columns([2, 3])
+    with left:
+        if finding.brand:
+            st.text(f"impersonates: {plain(finding.brand, 60)}")
+        if finding.final_url:
+            # Defanged on purpose: a clickable link here defeats the container.
+            st.text(f"final URL: {defang(finding.final_url)}")
+        st.text(f"model: {plain(finding.model or 'n/a', 60)}")
+        st.text(f"classified: {finding.classified_at:%Y-%m-%d %H:%M}")
+        st.text("notified" if finding.alerted_at else "not notified")
+        if finding.evidence:
+            st.text(plain(finding.evidence, 1000))
+    with right:
+        shot = finding.screenshot_file(captures_dir)
+        if shot is not None:
+            st.image(str(shot), width="stretch")
+        else:
+            st.info("No screenshot: the capture failed or the file is gone.")
+    st.divider()
+
+
+def main() -> None:
+    st.set_page_config(page_title="Lookalike Hunter", layout="wide")
+    settings = load_settings()
+
+    st.title("Lookalike Hunter")
+    st.caption(
+        "Brand-impersonating domains from Certificate Transparency, triaged by a "
+        "vision-language model. Links are defanged; screenshots were taken in an "
+        "isolated container."
+    )
+
+    # Only labels from the fixed set: these strings reach widgets that render Markdown.
+    counts = {
+        label: count
+        for label, count in label_counts(settings.db_path).items()
+        if label in LABEL_COLOURS
+    }
+    if counts:
+        for column, (label, count) in zip(st.columns(len(counts)), counts.items(), strict=True):
+            column.metric(label, count)
+
+    with st.sidebar:
+        st.header("Filter")
+        chosen = st.multiselect("Labels", list(LABEL_COLOURS), default=["phishing"])
+        min_confidence = st.slider("Minimum confidence", 0.0, 1.0, 0.0, 0.05)
+        limit = st.number_input("Maximum findings", 10, 500, 100, step=10)
+
+    findings = load_findings(
+        settings.db_path,
+        labels=tuple(chosen),
+        min_confidence=min_confidence,
+        limit=int(limit),
+    )
+    st.write(f"{len(findings)} finding(s)")
+    for finding in findings:
+        render_finding(finding, settings.capture.output_dir)
+
+
+if __name__ == "__main__":
+    main()
