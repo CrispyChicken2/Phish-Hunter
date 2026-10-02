@@ -4,19 +4,19 @@ Detect brand-impersonating domains (typosquatting, homoglyphs, combosquatting) f
 Certificate Transparency logs as soon as their certificate is issued, then triage them
 with a vision-language model. **Defensive use only.**
 
-> Status: Day 3 of 4 — ingestion, scoring, passive capture, VLM classification and a
-> measured evaluation. Alerting and the dashboard follow. See `CONTEXT.md` for the
+> Status: Day 4 of 4 — ingestion, scoring, passive capture, VLM classification, a
+> measured evaluation, alerting and a review dashboard. See `CONTEXT.md` for the
 > domain vocabulary (Candidate, Match, Alert, Verdict…).
 
 ```
-CT logs ──► scoring ──► Alerts ──► headless capture ──► VLM ──► Verdicts
-            (names)               (screenshot + DOM)   (vision)
+CT logs ──► scoring ──► Alerts ──► headless capture ──► VLM ──► Verdicts ──► notify
+            (names)               (screenshot + DOM)   (vision)           └─► dashboard
 ```
 
 ## Quick start
 
 ```bash
-make install          # uv sync (Python 3.12)
+make install          # uv sync --all-extras (Python 3.12)
 make check            # ruff + mypy --strict + pytest
 make replay           # offline: score the bundled CT fixture into data/lookalike.duckdb
 uv run lookalike-hunter alerts
@@ -65,6 +65,10 @@ uv run lookalike-hunter classify
 uv run lookalike-hunter verdicts --label phishing
 ```
 
+`capture` is the one command that runs attacker code, so it refuses to start
+outside the capture container. `--outside-container` overrides that; it puts a
+browser exploit, if a page carries one, on your own machine.
+
 To use a real vision model, put your key in `.env` (never in the YAML):
 
 ```bash
@@ -78,12 +82,47 @@ to every model on the account, so the model is chosen by name per request.
 Not every listed model is usable: on the free tier the `ministral-*` family answers
 normally (3b: 750 req/min, 8b: 188, 14b: 30) while `mistral-small`/`mistral-medium`
 return 429 with `x-ratelimit-limit-req-minute: 0` until pay-as-you-go is enabled.
-The default is `ministral-8b-latest`: it measured both more accurate and faster
-than the 14b on this dataset (see Measured results), so the default is the one
-that scored best, not the largest.
+The default is `ministral-8b-latest`: its accuracy is indistinguishable from the
+14b on this dataset, and it is faster with a far higher rate limit (see Models
+under Measured results).
 
 The `stub` backend classifies from DOM signals alone, needs no key, and is the
 baseline the VLM is compared against on Day 3.
+
+### Alerting
+
+```bash
+uv run lookalike-hunter alert           # announce new phishing verdicts, once each
+```
+
+Only `phishing` verdicts at or above `alert.min_confidence` are announced, and each
+one once: `alerted_at` is set only after a sink accepted it, so a delivery failure
+is retried on the next run. Findings are appended to `data/alerts.jsonl`. To also
+post to Slack, Discord or Teams, put the webhook URL in `.env`. The URL is a
+credential (whoever holds it can post to the channel), so it is never put in the
+YAML and never written to a log or error message:
+
+```bash
+echo "LH_ALERT__WEBHOOK_URL=https://hooks.slack.com/services/..." >> .env
+```
+
+The message is built so the chat client acts on none of it: URLs and hostnames
+are defanged (`hxxps://evil[.]com`), and the `<`, `>` and `@` that Slack and
+Discord read as mentions and links are neutralised, because the evidence
+sentence repeats text from the hostile page.
+
+### Dashboard
+
+```bash
+make dashboard          # http://localhost:8501
+```
+
+A review queue: each finding with its label, the model's evidence, the defanged
+final URL and the screenshot taken in the container. It opens the database
+read-only, so it can stay open while ingestion writes. `.streamlit/config.toml`
+binds it to `127.0.0.1` (it has no login and shows live phishing findings) and
+turns off Streamlit's usage telemetry. Streamlit is an optional extra
+(`uv sync --extra dashboard`), so the capture image does not carry it.
 
 ## Visiting hostile sites safely
 
@@ -95,7 +134,19 @@ treated as expendable:
 | Container | Separate image, non-root `pwuser`, all capabilities dropped, `no-new-privileges`, read-only root filesystem + tmpfs, 2 GB memory and 512 PID caps, only `./data` mounted |
 | Browser | Chromium sandbox **enabled** (Playwright disables it by default), fresh context per site, 15 s timeout, downloads refused, dialogs auto-dismissed |
 | Behaviour | Never fills a form, never submits credentials, never follows links: load, screenshot, read the DOM, leave |
-| Network | Non-`http(s)` schemes refused; every request's host is resolved and blocked if it is loopback, private, link-local or cloud metadata, so a redirect cannot make our browser probe your LAN |
+| Network | Non-`http(s)` schemes refused; every request's host is resolved and blocked if it is loopback, private, link-local or cloud metadata, so a redirect cannot make our browser probe your LAN. WebSockets go through the same check (Playwright's request filter does not see them), and WebRTC's direct UDP is disabled, since a STUN server at a private address would otherwise reach the LAN; both bypasses were reproduced before being closed and are regression-tested |
+| Launch | `capture` refuses to run outside the container unless told `--outside-container` |
+
+What the browser leaves behind is treated as hostile too, because the host reads it:
+
+| Output | Measure |
+|---|---|
+| Page source | Saved as `.html.txt`, so a double-click opens a text editor rather than running the kit from `file://` |
+| Stored paths | The database is written from inside the container. A screenshot path is resolved, symlinks included, and refused unless it lands under the capture directory, so a tampered row cannot make the host upload `~/.ssh/id_rsa` to the model API or show it in the dashboard |
+| Terminal | Control characters stripped from everything printed |
+| Notifications | Defanged and stripped of chat markup (see Alerting) |
+| Dashboard | Hostile text rendered as plain text: Markdown would turn `[x](url)` into a link and `![](url)` into a request to the attacker's server. Bound to localhost |
+| Reports | Model and page text wrapped in Markdown code spans that cannot be closed |
 
 Docker's default seccomp profile blocks the user namespaces Chromium's sandbox
 needs, so the compose service sets `seccomp=unconfined`: it is one filter or the
@@ -264,8 +315,20 @@ Operationally: about 2% of certificates are skipped when the local CT server out
 the consumer. Ctrl+C and SIGTERM (as sent by `docker stop`) both flush buffered
 Matches before exiting.
 
-Security caveats that hardening does not remove: DNS rebinding can still defeat the
-private-address check, since Chromium resolves each host again after we do; the
-capture container has `./data` mounted read-write; captures are never pruned, so disk
-use grows without bound; and a page's own text reaches the classifier prompt, which is
-fenced and labelled as untrusted data but cannot be made injection-proof.
+Security caveats that hardening does not remove:
+
+- **DNS rebinding** can still defeat the private-address check, since Chromium
+  resolves each host again after we do. Closing it properly needs an egress proxy
+  that resolves once, checks the address and connects to that same address.
+- **The capture container has `./data` mounted read-write**, including the DuckDB
+  file the host opens. The host no longer trusts the file paths in it, but someone
+  who escaped both Chromium's sandbox and the browser process could still write
+  false rows or a deliberately malformed database file. Splitting the mounts, so
+  the container writes captures and a results file the host imports, would remove
+  that.
+- **Captures are never pruned**, so disk use grows without bound.
+- **A page's own text reaches the classifier prompt.** It is fenced and labelled
+  as untrusted data, but cannot be made injection-proof: a page can still talk the
+  model into a wrong label.
+- **Captures from before 2026-10-02 are saved as `.html`.** Open those only in a
+  text editor.
