@@ -217,7 +217,10 @@ def _widen_verdict_uniqueness(con: duckdb.DuckDBPyConnection) -> None:
     definition = con.execute(
         "SELECT sql FROM duckdb_tables() WHERE table_name = 'verdicts'"
     ).fetchone()
-    if definition is None or "UNIQUE(capture_id, backend, model)" in definition[0].replace(" ", ""):
+    # Both sides without spaces: DuckDB's own rendering of the constraint has them,
+    # and comparing a spaced needle to a stripped haystack never matched, which
+    # rebuilt the whole table on every open.
+    if definition is None or "UNIQUE(capture_id,backend,model)" in definition[0].replace(" ", ""):
         return
     log.info("store.migrating_verdicts_uniqueness")
     con.execute("BEGIN TRANSACTION")
