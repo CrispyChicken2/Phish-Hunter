@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import duckdb
+import structlog.testing
 
 from lookalike_hunter.classify.schema import Label, Verdict
 from lookalike_hunter.ingest.store import MatchStore
@@ -110,9 +111,12 @@ def test_migration_is_idempotent(tmp_path: Path) -> None:
 
 def test_a_fresh_database_needs_no_migration(tmp_path: Path) -> None:
     db = tmp_path / "new.duckdb"
-    MatchStore(db, 0.7)
+    with structlog.testing.capture_logs() as logs:
+        MatchStore(db, 0.7)
+        MatchStore(db, 0.7)  # second open must be a no-op
 
-    MatchStore(db, 0.7)  # second open must be a no-op
+    # The table is rebuilt only when its key is the old one, not on every open.
+    assert not [e for e in logs if e["event"] == "store.migrating_verdicts_uniqueness"]
 
     with duckdb.connect(str(db), read_only=True) as con:
         assert con.execute("SELECT count(*) FROM verdicts").fetchone() == (0,)
