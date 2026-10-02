@@ -27,5 +27,5 @@ A (Candidate, Brand) pair whose score is above the storage floor, persisted with
 **Alert**
 A Match whose score is above the alert threshold. Only Alerts are sent to capture and classification.
 
-**Verdict** *(Day 2)*
+**Verdict**
 The classification of an Alert's live site: `phishing`, `parked`, `legitimate` or `unreachable`.
