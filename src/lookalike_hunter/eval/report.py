@@ -186,7 +186,7 @@ class EvaluationReport:
                     "something other than phishing.",
                     "",
                     *(
-                        f"- `{p.fqdn}`: {p.predicted}, brand {p.verdict_brand}"
+                        f"- {_code(p.fqdn)}: {_code(p.predicted)}, brand {_code(p.verdict_brand)}"
                         for p in arm.contradictory_verdicts
                     ),
                 ]
@@ -197,14 +197,26 @@ class EvaluationReport:
         return "\n".join(lines)
 
 
+def _code(value: object) -> str:
+    """A Markdown code span that hostile text cannot break out of.
+
+    Hostnames, model answers and stored paths reach this report, which is the kind
+    of file that gets committed and rendered on GitHub. Inside a code span
+    ``[x](url)`` stays text; a backtick, pipe or newline would end the span or the
+    table row, so those are replaced.
+    """
+    text = str(value).replace("`", "'").replace("|", "/")
+    return "`" + " ".join(text.split())[:200] + "`"
+
+
 def _mistake_table(predictions: list[Prediction]) -> list[str]:
     rows = [
         "| Site | Expected | Predicted | Score | Screenshot |",
         "|---|---|---|---:|---|",
     ]
     rows += [
-        f"| `{p.fqdn}` | {p.expected} | {p.predicted} | {p.score:.2f} | "
-        f"{'`' + p.screenshot + '`' if p.screenshot else '-'} |"
+        f"| {_code(p.fqdn)} | {p.expected} | {_code(p.predicted)} | {p.score:.2f} | "
+        f"{_code(p.screenshot) if p.screenshot else '-'} |"
         for p in predictions
     ]
     return rows

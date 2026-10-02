@@ -277,3 +277,13 @@ def test_report_renders_the_source_split(scorer: Scorer) -> None:
 
     assert "Per source" in markdown
     assert "never shows a page hosted on github.io" in markdown
+
+
+def test_hostile_text_cannot_break_out_of_the_markdown_report() -> None:
+    """The report gets committed and rendered; model text must stay text."""
+    from lookalike_hunter.eval.report import _code
+
+    rendered = _code("x`](https://evil.example) | injected\n# heading")
+
+    assert rendered.startswith("`") and rendered.endswith("`")
+    assert rendered.count("`") == 2 and "|" not in rendered and "\n" not in rendered

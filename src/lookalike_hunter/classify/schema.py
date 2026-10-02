@@ -42,7 +42,7 @@ class Verdict(BaseModel):
 
     label: Label
     confidence: float = Field(ge=0.0, le=1.0)
-    brand_impersonated: str | None = None
+    brand_impersonated: str | None = Field(default=None, max_length=200)
     evidence: str = Field(max_length=1000)
     # Filled in by the backend after parsing; never part of the model's own JSON.
     usage: TokenUsage | None = None
