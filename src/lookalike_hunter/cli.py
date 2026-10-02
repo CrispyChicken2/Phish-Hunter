@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
+import os
 import re
 import signal
 from pathlib import Path
@@ -39,6 +40,9 @@ log = get_logger(__name__)
 # Page titles, hostnames and model evidence are attacker-influenced text. Printing
 # them raw lets a crafted page drive the terminal with ANSI escape sequences.
 _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f-\x9f]")
+
+# Set by the capture image (docker/capture/Dockerfile) and nowhere else.
+CAPTURE_CONTAINER_ENV = "LH_CAPTURE_CONTAINER"
 
 
 def safe_text(value: object, limit: int = 300) -> str:
@@ -88,6 +92,15 @@ def _dataset_targets(
 
 
 def cmd_capture(settings: Settings, args: argparse.Namespace) -> None:
+    # The one command that runs attacker code. Run by habit from the host shell,
+    # a browser exploit would land on the operator's own machine instead of in a
+    # throwaway container, so that has to be asked for explicitly.
+    if not os.environ.get(CAPTURE_CONTAINER_ENV) and not args.outside_container:
+        raise SystemExit(
+            "capture visits hostile sites and belongs in the hardened container:\n"
+            "    docker compose run --rm capture capture\n"
+            "Pass --outside-container to run it on this machine anyway."
+        )
     store = MatchStore(settings.db_path, settings.scoring.alert_threshold)
     targets = None
     if args.from_dataset is not None:
@@ -286,8 +299,10 @@ def cmd_evaluate(settings: Settings, args: argparse.Namespace) -> None:
 def cmd_alert(settings: Settings, args: argparse.Namespace) -> None:
     """Notify about new findings that meet the alert policy."""
     store = MatchStore(settings.db_path, settings.scoring.alert_threshold)
+    configured = settings.alert.webhook_url
     sinks = build_sinks(
-        args.file or settings.alert.file_path, args.webhook or settings.alert.webhook_url
+        args.file or settings.alert.file_path,
+        args.webhook or (configured.get_secret_value() if configured else None),
     )
     stats = run_alerts(
         store,
@@ -366,6 +381,11 @@ def main(argv: list[str] | None = None) -> None:
         type=Path,
         default=None,
         help="Capture the sites in a dataset file instead of pending alerts",
+    )
+    capture.add_argument(
+        "--outside-container",
+        action="store_true",
+        help="Visit hostile sites from this machine instead of the capture container",
     )
     capture.set_defaults(func=cmd_capture)
 

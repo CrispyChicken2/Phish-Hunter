@@ -61,17 +61,22 @@ class Notification:
         }
 
     def as_text(self) -> str:
-        """A one-screen summary. The URL is defanged so nobody clicks it by reflex."""
+        """A one-screen summary for a chat client, with nothing in it that acts.
+
+        Every field is made chat-safe, not only the URL: a bare hostname is
+        auto-linked too, and the evidence sentence repeats page text, which can
+        carry a mention or a disguised link.
+        """
         lines = [
-            f"[{clean(self.label, 20)}] {clean(self.fqdn, 253)} "
-            f"(brand: {clean(self.brand, 40)}, confidence {self.confidence:.2f}, "
+            f"[{chat_safe(self.label, 20)}] {chat_safe(self.fqdn, 253)} "
+            f"(brand: {chat_safe(self.brand, 40)}, confidence {self.confidence:.2f}, "
             f"score {self.score:.2f})",
-            f"evidence: {clean(self.evidence, 500)}",
+            f"evidence: {chat_safe(self.evidence, 500)}",
         ]
         if self.final_url:
-            lines.append(f"final URL: {defang(self.final_url)}")
+            lines.append(f"final URL: {chat_safe(self.final_url, 500)}")
         if self.screenshot:
-            lines.append(f"screenshot: {clean(self.screenshot, 300)}")
+            lines.append(f"screenshot: {chat_safe(self.screenshot, 300)}")
         return "\n".join(lines)
 
 
@@ -88,6 +93,26 @@ def defang(url: str) -> str:
         .replace("https://", "hxxps://")
         .replace(".", "[.]")
     )
+
+
+# A dot followed by a letter is how a hostname looks to an auto-linker; "0.93" is
+# left alone.
+_LINKABLE_DOT = re.compile(r"(?<=[A-Za-z0-9-])\.(?=[A-Za-z])")
+
+
+def chat_safe(value: object, limit: int = 300) -> str:
+    """Attacker-influenced text that a chat client will display but never act on.
+
+    Slack reads ``<!channel>`` and ``<https://evil|your bank>``, Discord reads
+    ``@everyone`` and ``[your bank](https://evil)``, and both turn a bare hostname
+    into a link. A page whose text reaches the evidence sentence could otherwise
+    ping a whole channel or plant a disguised link in the analyst's own alert.
+    """
+    text = clean(value, limit).replace("http://", "hxxp://").replace("https://", "hxxps://")
+    text = _LINKABLE_DOT.sub("[.]", text)
+    text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    # A zero-width space after @ keeps the text readable but breaks the mention.
+    return text.replace("@", "@​")
 
 
 class AlertSink(Protocol):
@@ -113,8 +138,12 @@ class FileSink:
 class WebhookSink:
     """POST the notification as JSON.
 
-    The payload carries both a `text` field, which Slack, Discord and Teams all
-    render, and the structured fields, so a custom consumer need not parse prose.
+    The prose goes in `text`, which Slack and Teams render, and again in
+    `content`, which is the field Discord reads (it rejects a message without
+    one). The structured fields follow, so a custom consumer need not parse prose.
+
+    The URL is a credential: anyone holding a Slack or Discord webhook URL can
+    post as it. It is therefore kept out of every error message and log line.
     """
 
     name = "webhook"
@@ -125,15 +154,19 @@ class WebhookSink:
         self._client = client
 
     def send(self, notification: Notification) -> None:
-        payload = {"text": notification.as_text(), **notification.as_dict()}
+        text = notification.as_text()
+        payload = {"text": text, "content": text, **notification.as_dict()}
         client = self._client or httpx.Client(timeout=self._timeout)
         try:
             response = client.post(self.url, json=payload, timeout=self._timeout)
             response.raise_for_status()
-        except httpx.HTTPError as exc:
+        except httpx.HTTPStatusError as exc:
             # A failed notification must not lose the finding: it stays unsent and
-            # the next run retries it.
-            raise AlertDeliveryError(f"webhook delivery failed: {exc}") from exc
+            # the next run retries it. httpx puts the URL in its own message, so
+            # only the status is reported.
+            raise AlertDeliveryError(f"webhook answered HTTP {exc.response.status_code}") from None
+        except httpx.HTTPError as exc:
+            raise AlertDeliveryError(f"webhook delivery failed: {type(exc).__name__}") from None
         finally:
             if self._client is None:
                 client.close()

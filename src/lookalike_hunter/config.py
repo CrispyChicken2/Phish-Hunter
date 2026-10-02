@@ -132,7 +132,9 @@ class AlertConfig(BaseModel):
     labels: list[str] = Field(default_factory=lambda: ["phishing"])
     min_confidence: float = 0.6
     file_path: Path | None = Path("data/alerts.jsonl")
-    webhook_url: str | None = None
+    # A credential: whoever holds a Slack or Discord webhook URL can post to the
+    # channel. Set LH_ALERT__WEBHOOK_URL in .env, never in the committed YAML.
+    webhook_url: SecretStr | None = None
     max_per_run: int = 50
 
 

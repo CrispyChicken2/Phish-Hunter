@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
+from lookalike_hunter.capture.models import stored_capture_file
 from lookalike_hunter.capture.signals import PageSignals
 from lookalike_hunter.classify.base import (
     ClassificationError,
@@ -44,11 +45,17 @@ def _signals_from_row(row: PendingClassification) -> PageSignals | None:
 
 
 def resolve_screenshot(row: PendingClassification, captures_dir: Path) -> Path | None:
-    """Stored paths are relative to the capture directory (see BrowserCapturer)."""
-    if row.screenshot_path is None:
-        return None
-    path = row.screenshot_path
-    return path if path.is_absolute() else captures_dir / path
+    """Stored paths are relative to the capture directory (see BrowserCapturer).
+
+    One that escapes it is treated as missing: this file is uploaded to the model
+    API, so it must never be something other than a screenshot we took.
+    """
+    resolved = stored_capture_file(row.screenshot_path, captures_dir)
+    if resolved is None and row.screenshot_path is not None:
+        log.warning(
+            "classify.screenshot_outside_captures", fqdn=row.fqdn, path=str(row.screenshot_path)
+        )
+    return resolved
 
 
 def _offline_verdict(row: PendingClassification, screenshot: Path | None) -> Verdict | None:
