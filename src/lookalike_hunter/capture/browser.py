@@ -23,6 +23,7 @@ from playwright.async_api import (
     Playwright,
     Request,
     Route,
+    WebSocketRoute,
     async_playwright,
 )
 from playwright.async_api import (
@@ -94,7 +95,14 @@ class BrowserCapturer:
             # the process that executes attacker-controlled content, so we keep it.
             # In Docker this needs seccomp=unconfined (see docker-compose.yml).
             chromium_sandbox=self.config.chromium_sandbox,
-            args=["--disable-background-networking", "--no-default-browser-check"],
+            args=[
+                "--disable-background-networking",
+                "--no-default-browser-check",
+                # WebRTC sends UDP from the network stack where no route handler
+                # sees it, so a page could probe the LAN through a STUN server
+                # at a private address. A screenshot never needs it.
+                "--force-webrtc-ip-handling-policy=disable_non_proxied_udp",
+            ],
         )
         return self
 
@@ -127,19 +135,30 @@ class BrowserCapturer:
         self._dns_cache[host] = private
         return private
 
-    async def _guard(self, route: Route, request: Request) -> None:
-        reason = is_blocked_url(
-            request.url, block_private_networks=self.config.block_private_networks
-        )
+    async def _refusal(self, url: str) -> str | None:
+        """Why ``url`` must not be requested, or None. One rule for every channel."""
+        reason = is_blocked_url(url, block_private_networks=self.config.block_private_networks)
         if reason is None and self.config.block_private_networks:
-            host = urlparse(request.url).hostname
+            host = urlparse(url).hostname
             if host and await self._host_is_private(host):
                 reason = f"private address behind {host}"
         if reason is not None:
-            log.debug("capture.request.blocked", url=request.url[:200], reason=reason)
+            log.debug("capture.request.blocked", url=url[:200], reason=reason)
+        return reason
+
+    async def _guard(self, route: Route, request: Request) -> None:
+        if await self._refusal(request.url) is not None:
             await route.abort("blockedbyclient")
             return
         await route.continue_()
+
+    async def _guard_websocket(self, ws: WebSocketRoute) -> None:
+        # context.route never sees WebSockets: without this handler a page could
+        # open ws://192.168.1.1/ and talk to the router (measured, not assumed).
+        if await self._refusal(ws.url) is not None:
+            await ws.close(code=1008, reason="blocked")
+            return
+        ws.connect_to_server()
 
     async def _new_context(self) -> BrowserContext:
         assert self._browser is not None, "use BrowserCapturer as an async context manager"
@@ -158,6 +177,7 @@ class BrowserCapturer:
         )
         context.set_default_timeout(self.config.timeout_s * 1000)
         await context.route("**/*", self._guard)
+        await context.route_web_socket("**/*", self._guard_websocket)
         return context
 
     async def capture(self, fqdn: str) -> CaptureResult:
@@ -242,7 +262,9 @@ class BrowserCapturer:
         directory.mkdir(parents=True, exist_ok=True)
         stamp = started.strftime("%Y%m%dT%H%M%SZ")
         screenshot_path = directory / f"{stamp}.png"
-        html_path = directory / f"{stamp}.html"
+        # Not ".html": double-clicking that would run the kit's scripts in the
+        # operator's own browser, outside the container, from file://.
+        html_path = directory / f"{stamp}.html.txt"
 
         await page.screenshot(path=str(screenshot_path), full_page=self.config.full_page_screenshot)
         html = (await page.content())[: self.config.max_html_bytes]

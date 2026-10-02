@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import socket
 import threading
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -111,6 +112,95 @@ async def test_capture_collects_screenshot_html_and_signals(tmp_path: Path, fake
     assert result.signals.cross_domain_form_targets == ["example.net"]
     # JavaScript must run: kits render their fake login client-side.
     assert 'data-rendered="yes"' in (tmp_path / result.html_path).read_text(encoding="utf-8")
+
+
+@needs_chromium
+async def test_saved_page_source_cannot_be_opened_as_a_web_page(
+    tmp_path: Path, fake_site: int
+) -> None:
+    """A .html file would run the kit's scripts in the operator's browser on a double-click."""
+    config = CaptureConfig(output_dir=tmp_path, timeout_s=10, block_private_networks=False)
+    async with BrowserCapturer(config) as capturer:
+        result = await capturer.capture(f"127.0.0.1:{fake_site}")
+
+    assert result.html_path is not None
+    assert result.html_path.suffix == ".txt"
+
+
+def _serve_page(page: bytes) -> tuple[ThreadingHTTPServer, int]:
+    class Handler(_Handler):
+        def do_GET(self) -> None:
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.end_headers()
+            self.wfile.write(page)
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server, server.server_address[1]
+
+
+@needs_chromium
+async def test_websockets_go_through_the_same_guard_as_requests(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """context.route never sees WebSockets; a page could reach the LAN through one."""
+    target = socket.socket()
+    target.bind(("127.0.0.1", 0))
+    target.listen(1)
+    target.settimeout(3)
+    port = target.getsockname()[1]
+    server, site = _serve_page(f"<script>new WebSocket('ws://127.0.0.1:{port}/')</script>".encode())
+
+    # Loopback serves the page, so private blocking is off; the guard is told to
+    # refuse the WebSocket's target instead, which is what it does for a LAN host.
+    config = CaptureConfig(output_dir=tmp_path, timeout_s=10, block_private_networks=False)
+    capturer = BrowserCapturer(config)
+    refused: list[str] = []
+    original = capturer._refusal
+
+    async def refuse_target(url: str) -> str | None:
+        if f":{port}" in url:
+            refused.append(url)
+            return "test target"
+        return await original(url)
+
+    monkeypatch.setattr(capturer, "_refusal", refuse_target)
+    try:
+        async with capturer:
+            await capturer.capture(f"127.0.0.1:{site}")
+        with pytest.raises(TimeoutError):
+            target.accept()
+    finally:
+        server.shutdown()
+        server.server_close()
+        target.close()
+    assert refused == [f"ws://127.0.0.1:{port}/"]
+
+
+@needs_chromium
+async def test_webrtc_cannot_send_udp_to_a_stun_server_on_the_lan(tmp_path: Path) -> None:
+    received = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    received.bind(("127.0.0.1", 0))
+    received.settimeout(1)
+    port = received.getsockname()[1]
+    server, site = _serve_page(
+        f"""<script>
+        const pc = new RTCPeerConnection({{iceServers: [{{urls: 'stun:127.0.0.1:{port}'}}]}});
+        pc.createDataChannel('x');
+        pc.createOffer().then(o => pc.setLocalDescription(o));
+        </script>""".encode()
+    )
+    config = CaptureConfig(output_dir=tmp_path, timeout_s=10, block_private_networks=False)
+    try:
+        async with BrowserCapturer(config) as capturer:
+            await capturer.capture(f"127.0.0.1:{site}")
+        with pytest.raises(TimeoutError):
+            received.recvfrom(2048)
+    finally:
+        server.shutdown()
+        server.server_close()
+        received.close()
 
 
 @needs_chromium
