@@ -34,7 +34,7 @@ def store_with_capture(
             captured_at=NOW,
             duration_ms=900,
             final_url="https://appleid-security.com/login",
-            screenshot_path=shot,
+            screenshot_path=Path("shot.png") if shot else None,
             signals=signals or PageSignals(title="Sign in", form_count=1, has_password_input=True),
         )
     )
@@ -51,7 +51,9 @@ def verdict_rows(store: MatchStore) -> list[tuple[str, str, float, str | None]]:
 async def test_stub_classifies_and_persists(tmp_path: Path) -> None:
     store = store_with_capture(tmp_path)
 
-    stats = await run_classifications(store, StubClassifier(), None, limit=10, max_retries=2)
+    stats = await run_classifications(
+        store, StubClassifier(), None, limit=10, max_retries=2, captures_dir=tmp_path
+    )
 
     assert stats.attempted == 1 and stats.failed == 0
     rows = verdict_rows(store)
@@ -60,9 +62,9 @@ async def test_stub_classifies_and_persists(tmp_path: Path) -> None:
 
 async def test_already_classified_captures_are_skipped(tmp_path: Path) -> None:
     store = store_with_capture(tmp_path)
-    await run_classifications(store, StubClassifier(), None, 10, 2)
+    await run_classifications(store, StubClassifier(), None, 10, 2, captures_dir=tmp_path)
 
-    second = await run_classifications(store, StubClassifier(), None, 10, 2)
+    second = await run_classifications(store, StubClassifier(), None, 10, 2, captures_dir=tmp_path)
 
     assert second.attempted == 0
     assert len(verdict_rows(store)) == 1
@@ -77,7 +79,7 @@ async def test_unreachable_capture_is_labelled_without_calling_the_model(tmp_pat
         async def classify(self, item: ClassificationInput) -> Verdict:
             raise AssertionError("the model must not be called for an unreachable site")
 
-    stats = await run_classifications(store, Exploding(), None, 10, 2)
+    stats = await run_classifications(store, Exploding(), None, 10, 2, captures_dir=tmp_path)
 
     assert stats.by_label[str(Label.UNREACHABLE)] == 1
     assert verdict_rows(store)[0][1] == "unreachable"
@@ -106,9 +108,44 @@ async def test_relative_screenshot_path_is_resolved_against_captures_dir(tmp_pat
     assert verdict_rows(store)[0][1] == "phishing"  # not "unknown": the file was found
 
 
+@pytest.mark.parametrize("stored", ["../secret.txt", "SECRET_ABSOLUTE"])
+async def test_a_stored_path_outside_the_captures_dir_is_never_read(
+    tmp_path: Path, stored: str
+) -> None:
+    """The DB is written by the capture container; a compromised one must not make
+    the host upload an arbitrary file to the model API."""
+    secret = tmp_path / "secret.txt"
+    secret.write_bytes(FAKE_PNG)
+    captures = tmp_path / "captures"
+    captures.mkdir()
+    store = MatchStore(tmp_path / "t.duckdb", 0.7)
+    store.save_capture(
+        CaptureResult(
+            fqdn="site.com",
+            url="https://site.com/",
+            status=CaptureStatus.OK,
+            captured_at=NOW,
+            duration_ms=10,
+            screenshot_path=secret if stored == "SECRET_ABSOLUTE" else Path(stored),
+            signals=PageSignals(title="Sign in", form_count=1, has_password_input=True),
+        )
+    )
+    read: list[Path] = []
+
+    class Recording(StubClassifier):
+        async def classify(self, item: ClassificationInput) -> Verdict:
+            read.append(item.screenshot_path)
+            return await super().classify(item)
+
+    await run_classifications(store, Recording(), None, 10, 2, captures_dir=captures)
+
+    assert read == []
+    assert verdict_rows(store)[0][1] == "unknown"
+
+
 async def test_missing_screenshot_is_unknown(tmp_path: Path) -> None:
     store = store_with_capture(tmp_path, with_screenshot=False)
-    await run_classifications(store, StubClassifier(), None, 10, 2)
+    await run_classifications(store, StubClassifier(), None, 10, 2, captures_dir=tmp_path)
     assert verdict_rows(store)[0][1] == "unknown"
 
 
@@ -121,7 +158,7 @@ async def test_backend_failure_is_recorded_not_raised(tmp_path: Path) -> None:
         async def classify(self, item: ClassificationInput) -> Verdict:
             raise ClassificationError("API returned 401", retryable=False)
 
-    stats = await run_classifications(store, AlwaysFails(), "m", 10, 2)
+    stats = await run_classifications(store, AlwaysFails(), "m", 10, 2, captures_dir=tmp_path)
 
     assert stats.failed == 1
     _fqdn, label, _confidence, error = verdict_rows(store)[0]
@@ -131,7 +168,7 @@ async def test_backend_failure_is_recorded_not_raised(tmp_path: Path) -> None:
 
 async def test_nothing_pending_is_a_noop(tmp_path: Path) -> None:
     store = MatchStore(tmp_path / "t.duckdb", 0.7)
-    stats = await run_classifications(store, StubClassifier(), None, 10, 2)
+    stats = await run_classifications(store, StubClassifier(), None, 10, 2, captures_dir=tmp_path)
     assert stats.attempted == 0
 
 
@@ -149,7 +186,9 @@ async def test_limit_is_respected(tmp_path: Path, limit: int) -> None:
             )
         )
 
-    stats = await run_classifications(store, StubClassifier(), None, limit, 2)
+    stats = await run_classifications(
+        store, StubClassifier(), None, limit, 2, captures_dir=tmp_path
+    )
     assert stats.attempted == min(limit, 4)
 
 

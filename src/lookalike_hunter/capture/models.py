@@ -37,3 +37,19 @@ class CaptureResult:
     @property
     def reachable(self) -> bool:
         return self.status is CaptureStatus.OK
+
+
+def stored_capture_file(stored: str | Path | None, captures_dir: Path) -> Path | None:
+    """The file a stored capture path names, or None if it points outside ``captures_dir``.
+
+    The database is written from inside the capture container, the one place that
+    runs attacker code. Were that container compromised, a row naming
+    ``../../.env`` or ``/home/me/.ssh/id_rsa`` would have the host read that file,
+    then upload it to the model API or display it. So a stored path is resolved,
+    symlinks included, and must land under the capture directory.
+    """
+    if not stored:
+        return None
+    base = captures_dir.resolve()
+    resolved = (base / stored).resolve()
+    return resolved if resolved.is_relative_to(base) else None

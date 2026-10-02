@@ -113,8 +113,10 @@ def test_webhook_sink_posts_text_and_structure() -> None:
     sink.send(notification())
 
     payload = json.loads(seen[0].content)
-    assert "appleid-security.com" in payload["text"]  # human-readable
-    assert payload["label"] == "phishing"  # machine-readable
+    assert "appleid-security[.]com" in payload["text"]  # human-readable, not a link
+    assert payload["content"] == payload["text"]  # Discord reads `content`, not `text`
+    assert payload["fqdn"] == "appleid-security.com"  # machine-readable
+    assert payload["label"] == "phishing"
     assert "hxxps://" in payload["text"]  # defanged in the prose
 
 
@@ -128,6 +130,56 @@ def test_webhook_failure_is_raised_so_the_finding_is_retried() -> None:
 
     with pytest.raises(AlertDeliveryError):
         sink.send(notification())
+
+
+@pytest.mark.parametrize("response", [httpx.Response(404), httpx.ConnectError("refused")])
+def test_a_webhook_error_never_reveals_the_webhook_url(
+    response: httpx.Response | httpx.ConnectError,
+) -> None:
+    """The URL is a credential and error messages end up in logs."""
+    secret = "https://hooks.slack.com/services/T000/B000/s3cr3tt0k3n"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+    sink = WebhookSink(secret, client=httpx.Client(transport=httpx.MockTransport(handler)))
+    with pytest.raises(AlertDeliveryError) as caught:
+        sink.send(notification())
+
+    assert "s3cr3tt0k3n" not in str(caught.value)
+    assert caught.value.__cause__ is None and caught.value.__suppress_context__
+
+
+def test_page_text_cannot_ping_a_channel_or_plant_a_link() -> None:
+    """The evidence sentence repeats page text; a chat client must not act on it."""
+    text = notification(
+        fqdn="www.paypa1-login.com",
+        evidence=(
+            "Page says <!channel> @everyone [Verify here](https://evil.example/x) "
+            "and <https://evil.example|your bank>, confidence 0.93."
+        ),
+        brand="<@U123>",
+    ).as_text()
+
+    assert "<" not in text and ">" not in text
+    assert "@everyone" not in text
+    assert "https://" not in text
+    assert "evil.example" not in text and "paypa1-login.com" not in text
+    assert "0.93" in text  # numbers are not mangled
+
+
+def test_the_webhook_url_is_read_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    from lookalike_hunter.config import load_settings
+
+    monkeypatch.setenv("LH_CONFIG", str(Path(__file__).parents[1] / "configs" / "default.yaml"))
+    monkeypatch.setenv("LH_ALERT__WEBHOOK_URL", "https://hooks.example/secret")
+    settings = load_settings()
+
+    assert settings.alert.webhook_url is not None
+    assert settings.alert.webhook_url.get_secret_value() == "https://hooks.example/secret"
+    assert "secret" not in repr(settings.alert)
 
 
 # ------------------------------------------------------------------------ policy

@@ -5,7 +5,10 @@ FROM mcr.microsoft.com/playwright/python:v1.63.0-noble
 # Pinned: the image must build the same way tomorrow as today.
 COPY --from=ghcr.io/astral-sh/uv:0.11.21 /uv /usr/local/bin/uv
 
-ENV PYTHONUNBUFFERED=1 \
+# LH_CAPTURE_CONTAINER tells `lookalike-hunter capture` it is in the sandbox it
+# insists on; nothing else sets it.
+ENV LH_CAPTURE_CONTAINER=1 \
+    PYTHONUNBUFFERED=1 \
     UV_LINK_MODE=copy \
     UV_COMPILE_BYTECODE=1 \
     HOME=/tmp \

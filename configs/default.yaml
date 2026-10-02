@@ -32,8 +32,8 @@ alert:
   labels: [phishing]
   min_confidence: 0.6
   file_path: data/alerts.jsonl
-  # Any JSON webhook: Slack, Discord, Teams. Leave empty to write only the file.
-  webhook_url: null
+  # Any JSON webhook (Slack, Discord, Teams). The URL is a credential: set
+  # LH_ALERT__WEBHOOK_URL in .env, never here. Unset, only the file is written.
   max_per_run: 50
 
 brands:

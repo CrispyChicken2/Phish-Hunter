@@ -33,7 +33,23 @@ def test_capture_command_runs_with_nothing_pending(
     config = str(ROOT / "configs" / "default.yaml")
 
     # No alerts stored: the command must be a clean no-op, not a crash.
-    main(["--config", config, "capture"])
+    main(["--config", config, "capture", "--outside-container"])
+
+
+def test_capture_refuses_to_run_outside_the_container_by_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A habitual run from the host shell would put a browser exploit on the host."""
+    monkeypatch.setenv("LH_DB_PATH", str(tmp_path / "empty.duckdb"))
+    monkeypatch.delenv("LH_CAPTURE_CONTAINER", raising=False)
+    config = str(ROOT / "configs" / "default.yaml")
+
+    with pytest.raises(SystemExit, match="hardened container"):
+        main(["--config", config, "capture"])
+    assert not (tmp_path / "empty.duckdb").exists()
+
+    monkeypatch.setenv("LH_CAPTURE_CONTAINER", "1")
+    main(["--config", config, "capture"])  # the image sets this; no flag needed there
 
 
 def test_classify_then_verdicts_output(
@@ -41,6 +57,7 @@ def test_classify_then_verdicts_output(
 ) -> None:
     db = tmp_path / "cli.duckdb"
     monkeypatch.setenv("LH_DB_PATH", str(db))
+    monkeypatch.setenv("LH_CAPTURE__OUTPUT_DIR", str(tmp_path))
     config = str(ROOT / "configs" / "default.yaml")
     shot = tmp_path / "shot.png"
     shot.write_bytes(b"\x89PNG-fake")
@@ -51,7 +68,7 @@ def test_classify_then_verdicts_output(
             status=CaptureStatus.OK,
             captured_at=datetime.now(UTC),
             duration_ms=500,
-            screenshot_path=shot,
+            screenshot_path=Path("shot.png"),
             signals=PageSignals(title="Sign in", form_count=1, has_password_input=True),
         )
     )
