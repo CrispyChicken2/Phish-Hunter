@@ -36,6 +36,7 @@ from lookalike_hunter.ingest.store import MatchStore, PendingCapture, connect_wi
 from lookalike_hunter.logging import configure_logging, get_logger
 from lookalike_hunter.scoring.scorer import Scorer
 from lookalike_hunter.variants.generator import VariantIndex
+from lookalike_hunter.watch import IngestionStoppedError, watch
 
 log = get_logger(__name__)
 
@@ -339,6 +340,49 @@ def cmd_alert(settings: Settings, args: argparse.Namespace) -> None:
     )
 
 
+def cmd_watch(settings: Settings, args: argparse.Namespace) -> None:
+    """Ingest continuously and run capture -> classify -> alert on a timer."""
+    if os.environ.get(CAPTURE_CONTAINER_ENV):
+        raise SystemExit("watch runs on the host, which starts the capture container itself")
+    store = MatchStore(settings.db_path, settings.scoring.alert_threshold)
+    index = VariantIndex.from_brands(settings.brands, settings.variants.swap_tlds)
+    scorer = Scorer(settings.brands, settings.scoring, index)
+    # --once is one triage pass (cron, a quick check): no point starting the stream.
+    ingest = not (args.no_ingest or args.once)
+    source = _build_source(settings, settings.ct.source, None) if ingest else None
+    classifier, model = _build_classifier(settings)
+    configured = settings.alert.webhook_url
+    sinks = build_sinks(
+        settings.alert.file_path, configured.get_secret_value() if configured else None
+    )
+    executor = visit_in_process if args.outside_container else visit_in_docker
+
+    async def run() -> int:
+        try:
+            return await watch(
+                settings,
+                store,
+                scorer,
+                source,
+                executor,
+                classifier,
+                model,
+                sinks,
+                args.interval or settings.watch.interval_s,
+                cycles=1 if args.once else None,
+            )
+        finally:
+            if isinstance(classifier, MistralClassifier):
+                await classifier.aclose()
+
+    with contextlib.suppress(KeyboardInterrupt):
+        try:
+            cycles = asyncio.run(run())
+        except IngestionStoppedError as exc:
+            raise SystemExit(str(exc)) from None
+        log.info("watch.done", cycles=cycles)
+
+
 def cmd_verdicts(settings: Settings, args: argparse.Namespace) -> None:
     """Print the latest verdicts with the screenshot that backs each one."""
     with connect_with_retry(settings.db_path, read_only=True) as con:
@@ -463,6 +507,27 @@ def main(argv: list[str] | None = None) -> None:
     alert.add_argument("--file", type=Path, default=None, help="Override the JSONL sink path")
     alert.add_argument("--webhook", default=None, help="Override the webhook URL")
     alert.set_defaults(func=cmd_alert)
+
+    watch_cmd = sub.add_parser(
+        "watch", help="Run unattended: ingest CT, then capture, classify and alert on a timer"
+    )
+    watch_cmd.add_argument(
+        "--interval", type=float, default=None, help="Seconds between cycles (watch.interval_s)"
+    )
+    watch_cmd.add_argument(
+        "--once", action="store_true", help="One triage cycle on what is stored, then stop"
+    )
+    watch_cmd.add_argument(
+        "--no-ingest",
+        action="store_true",
+        help="Only triage what is already stored (e.g. while `ingest` runs elsewhere)",
+    )
+    watch_cmd.add_argument(
+        "--outside-container",
+        action="store_true",
+        help="Visit hostile sites from this machine instead of the capture container",
+    )
+    watch_cmd.set_defaults(func=cmd_watch)
 
     verdicts = sub.add_parser("verdicts", help="List recent verdicts with their evidence")
     verdicts.add_argument("--limit", type=int, default=20)

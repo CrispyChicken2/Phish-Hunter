@@ -36,6 +36,10 @@ alert:
   # LH_ALERT__WEBHOOK_URL in .env, never here. Unset, only the file is written.
   max_per_run: 50
 
+watch:
+  # Seconds between capture -> classify -> alert cycles: the detection latency.
+  interval_s: 300
+
 brands:
   - name: paypal
     tokens: [paypal]

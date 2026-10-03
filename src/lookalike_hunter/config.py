@@ -138,6 +138,14 @@ class AlertConfig(BaseModel):
     max_per_run: int = 50
 
 
+class WatchConfig(BaseModel):
+    """The unattended loop (`lookalike-hunter watch`)."""
+
+    # Time between triage cycles, and so the latency from a certificate to a
+    # notification. Phishing kits are often taken down within hours.
+    interval_s: float = 300.0
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="LH_",
@@ -152,6 +160,8 @@ class Settings(BaseSettings):
         default=None, validation_alias=AliasChoices("MISTRAL_API_KEY", "LH_MISTRAL_API_KEY")
     )
     db_path: Path = Path("data/lookalike.duckdb")
+    # The labelled evaluation set; the dashboard writes analyst labels into it.
+    dataset_path: Path = Path("datasets/eval.jsonl")
     log_level: str = "INFO"
     log_json: bool = True
     ct: CTConfig = Field(default_factory=CTConfig)
@@ -160,6 +170,7 @@ class Settings(BaseSettings):
     capture: CaptureConfig = Field(default_factory=CaptureConfig)
     classify: ClassifyConfig = Field(default_factory=ClassifyConfig)
     alert: AlertConfig = Field(default_factory=AlertConfig)
+    watch: WatchConfig = Field(default_factory=WatchConfig)
     brands: list[BrandConfig] = Field(default_factory=list)
 
     @classmethod
