@@ -20,7 +20,7 @@ services:
     build:
       context: .
       dockerfile: docker/capture/Dockerfile
-    profiles: ["tools"] # only runs on `docker compose run capture`
+    profiles: ["tools"] # only started by `lookalike-hunter capture`, one job at a time
     networks: [capture]
     user: pwuser
     security_opt:
@@ -40,12 +40,10 @@ services:
     # A runaway page cannot exhaust the host.
     mem_limit: 2g
     pids_limit: 512
-    environment:
-      LH_DB_PATH: /app/data/lookalike.duckdb
-      LH_CAPTURE__OUTPUT_DIR: /app/data/captures
     volumes:
-      # The only host path the browser container can reach.
-      - ./data:/app/data
-      - ./configs:/app/configs:ro
-      # Ground truth, read-only: the browser container must never edit labels.
-      - ./datasets:/app/datasets:ro
+      # The only host path the browser container can reach: the screenshots, the
+      # job it is given and the results it returns. No database, no config, no
+      # dataset: the host picks the targets, then validates every result before
+      # it becomes a row (src/lookalike_hunter/capture/handoff.py).
+      # `lookalike-hunter capture` sets LH_CAPTURES_DIR to capture.output_dir.
+      - ${LH_CAPTURES_DIR:-./data/captures}:/app/captures

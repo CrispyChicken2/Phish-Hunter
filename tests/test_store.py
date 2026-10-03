@@ -133,3 +133,22 @@ def test_uncaptured_returns_sites_needing_a_screenshot(tmp_path: Path) -> None:
 
 def test_uncaptured_with_no_input(tmp_path: Path) -> None:
     assert MatchStore(tmp_path / "t.duckdb", 0.7).uncaptured([], 24) == []
+
+
+def test_capture_paths_are_stored_with_forward_slashes(tmp_path: Path) -> None:
+    """The host now writes them; a Windows backslash would not resolve on Linux."""
+    store = MatchStore(tmp_path / "t.duckdb", 0.7)
+    store.save_capture(
+        CaptureResult(
+            "a.test",
+            "https://a.test/",
+            CaptureStatus.OK,
+            datetime(2026, 10, 3, tzinfo=UTC),
+            1,
+            screenshot_path=Path("a.test") / "shot.png",
+            html_path=Path("a.test") / "page.html.txt",
+        )
+    )
+    with duckdb.connect(str(store.db_path), read_only=True) as con:
+        row = con.execute("SELECT screenshot_path, html_path FROM captures").fetchone()
+    assert row == ("a.test/shot.png", "a.test/page.html.txt")

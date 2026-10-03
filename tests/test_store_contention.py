@@ -86,11 +86,11 @@ def test_real_contention_from_another_process(tmp_path: Path) -> None:
     con.close()
 
 
-async def test_one_failed_save_does_not_abandon_the_batch(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Contention on site 3 must not cost us sites 4 onwards."""
-    import lookalike_hunter.capture.runner as runner_module
+async def test_one_failed_save_does_not_abandon_the_batch(tmp_path: Path) -> None:
+    """Contention on site 2 must not cost us site 3 onwards."""
+    from datetime import UTC, datetime
+
+    from lookalike_hunter.capture.handoff import CaptureJob, ResultWriter
     from lookalike_hunter.capture.models import CaptureResult, CaptureStatus
     from lookalike_hunter.capture.runner import run_captures
     from lookalike_hunter.config import CaptureConfig
@@ -113,21 +113,14 @@ async def test_one_failed_save_does_not_abandon_the_batch(
                 raise LockContentionError("locked by another process")
             saved.append(result.fqdn)
 
-    class FakeCapturer:
-        def __init__(self, config: CaptureConfig) -> None: ...
+    async def container(job: CaptureJob, root: Path) -> None:
+        writer = ResultWriter(root, job.job_id)
+        for fqdn in job.targets:
+            writer.write(
+                CaptureResult(fqdn, f"https://{fqdn}/", CaptureStatus.TIMEOUT, datetime.now(UTC), 5)
+            )
 
-        async def __aenter__(self) -> "FakeCapturer":
-            return self
-
-        async def __aexit__(self, *exc: object) -> None: ...
-
-        async def capture(self, fqdn: str) -> CaptureResult:
-            from datetime import UTC, datetime
-
-            return CaptureResult(fqdn, f"https://{fqdn}/", CaptureStatus.OK, datetime.now(UTC), 5)
-
-    monkeypatch.setattr(runner_module, "BrowserCapturer", FakeCapturer)
-    stats = await run_captures(FlakyStore(), CaptureConfig(output_dir=tmp_path))
+    stats = await run_captures(FlakyStore(), CaptureConfig(output_dir=tmp_path), executor=container)
 
     assert stats.attempted == 3
     assert stats.save_failures == 1
