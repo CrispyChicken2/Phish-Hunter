@@ -52,6 +52,8 @@ class LabelledSite:
     brand: str | None = None
     note: str | None = None
     label_basis: LabelBasis = "screenshot"
+    # "human" (an analyst, e.g. from the dashboard) or "agent"; None on old lines.
+    labelled_by: str | None = None
 
 
 def _parse_line(raw: str, path: Path, line_number: int, allow_unlabelled: bool) -> LabelledSite:
@@ -107,6 +109,7 @@ def _parse_line(raw: str, path: Path, line_number: int, allow_unlabelled: bool) 
         brand=payload.get("brand"),
         note=payload.get("note"),
         label_basis=cast(LabelBasis, basis),
+        labelled_by=payload.get("labelled_by"),
     )
 
 

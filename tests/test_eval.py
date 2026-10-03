@@ -287,3 +287,22 @@ def test_hostile_text_cannot_break_out_of_the_markdown_report() -> None:
 
     assert rendered.startswith("`") and rendered.endswith("`")
     assert rendered.count("`") == 2 and "|" not in rendered and "\n" not in rendered
+
+
+def test_the_report_says_who_labelled_the_benchmark(tmp_path: Path, scorer: Scorer) -> None:
+    """The benchmark is only as independent as its labels; the report must say."""
+    dataset = tmp_path / "d.jsonl"
+    dataset.write_text(
+        '{"fqdn": "a.test", "expected": "parked", "source": "alerts", '
+        '"labelled_at": "2026-10-03", "labelled_by": "human"}\n'
+        '{"fqdn": "b.test", "expected": "legitimate", "source": "alerts", '
+        '"labelled_at": "2026-09-26", "labelled_by": "agent"}\n'
+        '{"fqdn": "c.test", "expected": "legitimate", "source": "alerts", '
+        '"labelled_at": "2026-09-26", "labelled_by": "agent"}\n',
+        encoding="utf-8",
+    )
+
+    report = run_evaluation(dataset, scorer, 0.7, arms=(ARM_SCORING_ONLY,))
+
+    assert report.labelled_by == {"human": 1, "agent": 2}
+    assert "- Labelled by: agent 2, human 1" in report.to_markdown()
