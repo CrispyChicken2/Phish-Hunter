@@ -2,6 +2,9 @@
 
 Run with: make dashboard  (streamlit run src/lookalike_hunter/dashboard/app.py)
 
+Each finding can be confirmed or corrected; the answer is written to the
+evaluation dataset as a human label (see eval/feedback.py).
+
 Deliberately thin. The querying lives in `data.py` where it is tested; this file
 only arranges what comes back.
 
@@ -20,6 +23,7 @@ from pathlib import Path
 
 import streamlit as st
 
+from lookalike_hunter.classify.schema import Label
 from lookalike_hunter.config import load_settings
 from lookalike_hunter.dashboard.data import (
     Finding,
@@ -28,6 +32,15 @@ from lookalike_hunter.dashboard.data import (
     load_findings,
     plain,
 )
+from lookalike_hunter.eval.feedback import (
+    HUMAN,
+    REVIEWABLE_LABELS,
+    ExistingLabel,
+    current_labels,
+    record_label,
+)
+
+_NONE = ExistingLabel(None, None, None)
 
 LABEL_COLOURS = {
     "phishing": "#b3261e",
@@ -38,7 +51,34 @@ LABEL_COLOURS = {
 }
 
 
-def render_finding(finding: Finding, captures_dir: Path) -> None:
+def render_review(finding: Finding, existing: ExistingLabel | None, dataset_path: Path) -> None:
+    """Confirm or correct the model; the answer becomes a human label in the benchmark."""
+    if existing is not None and existing.expected:
+        by = "you" if existing.labelled_by == HUMAN else plain(existing.labelled_by or "?", 20)
+        st.text(f"labelled {plain(existing.expected, 20)} by {by} on {existing.labelled_at}")
+    options = [str(label) for label in REVIEWABLE_LABELS]
+    # Start from the current label, else the model's answer, so confirming is one click.
+    start = existing.expected if existing and existing.expected in options else finding.label
+    choice = st.selectbox(
+        "What this site really is",
+        options,
+        index=options.index(start) if start in options else options.index("unknown"),
+        key=f"review-{finding.fqdn}",
+    )
+    if st.button("Save label", key=f"save-{finding.fqdn}"):
+        record_label(
+            dataset_path,
+            finding.fqdn,
+            Label(choice),
+            brand=finding.brand,
+            suggestion=finding.label if finding.label in LABEL_COLOURS else None,
+        )
+        st.rerun()
+
+
+def render_finding(
+    finding: Finding, captures_dir: Path, existing: ExistingLabel | None, dataset_path: Path
+) -> None:
     # The label is matched against the fixed set rather than escaped: a value
     # outside it (a tampered row) is shown as plain text instead of as a badge.
     colour = LABEL_COLOURS.get(finding.label)
@@ -65,6 +105,7 @@ def render_finding(finding: Finding, captures_dir: Path) -> None:
         st.text("notified" if finding.alerted_at else "not notified")
         if finding.evidence:
             st.text(plain(finding.evidence, 1000))
+        render_review(finding, existing, dataset_path)
     with right:
         shot = finding.screenshot_file(captures_dir)
         if shot is not None:
@@ -100,16 +141,26 @@ def main() -> None:
         chosen = st.multiselect("Labels", list(LABEL_COLOURS), default=["phishing"])
         min_confidence = st.slider("Minimum confidence", 0.0, 1.0, 0.0, 0.05)
         limit = st.number_input("Maximum findings", 10, 500, 100, step=10)
+        unreviewed = st.checkbox("Only findings I have not labelled", value=False)
 
+    labels = current_labels(settings.dataset_path)
     findings = load_findings(
         settings.db_path,
         labels=tuple(chosen),
         min_confidence=min_confidence,
         limit=int(limit),
     )
-    st.write(f"{len(findings)} finding(s)")
+    if unreviewed:
+        findings = [f for f in findings if labels.get(f.fqdn, _NONE).labelled_by != HUMAN]
+    reviewed = sum(1 for label in labels.values() if label.labelled_by == HUMAN)
+    st.write(f"{len(findings)} finding(s) · {reviewed} site(s) labelled by you so far")
     for finding in findings:
-        render_finding(finding, settings.capture.output_dir)
+        render_finding(
+            finding,
+            settings.capture.output_dir,
+            labels.get(finding.fqdn),
+            settings.dataset_path,
+        )
 
 
 if __name__ == "__main__":

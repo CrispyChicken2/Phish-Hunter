@@ -77,6 +77,8 @@ class EvaluationReport:
     generated_at: datetime
     alert_threshold: float
     unjudgeable: int = 0
+    # Who assigned the labels: the honesty of the benchmark depends on it.
+    labelled_by: dict[str, int] = field(default_factory=dict)
     arms: dict[str, ArmResult] = field(default_factory=dict)
 
     def to_json(self) -> str:
@@ -88,6 +90,7 @@ class EvaluationReport:
             "",
             f"- Dataset: `{self.dataset_path}` ({self.dataset_size} judgeable sites"
             + (f", {self.unjudgeable} excluded as unknown)" if self.unjudgeable else ")"),
+            f"- Labelled by: {_labellers(self.labelled_by)}",
             f"- Generated: {self.generated_at:%Y-%m-%d %H:%M:%S} UTC",
             f"- Alert threshold: {self.alert_threshold}",
             "",
@@ -256,3 +259,10 @@ def write_report(report: EvaluationReport, out_dir: Path) -> tuple[Path, Path]:
     json_path.write_text(report.to_json(), encoding="utf-8")
     markdown_path.write_text(report.to_markdown(), encoding="utf-8")
     return json_path, markdown_path
+
+
+def _labellers(counts: dict[str, int]) -> str:
+    """'human 12, agent 52': the share of ground truth an independent person gave."""
+    if not counts:
+        return "not recorded"
+    return ", ".join(f"{who} {n}" for who, n in sorted(counts.items(), key=lambda kv: -kv[1]))

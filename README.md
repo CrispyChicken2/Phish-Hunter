@@ -128,6 +128,35 @@ binds it to `127.0.0.1` (it has no login and shows live phishing findings) and
 turns off Streamlit's usage telemetry. Streamlit is an optional extra
 (`uv sync --extra dashboard`), so the capture image does not carry it.
 
+Each finding can be confirmed or corrected ("What this site really is", then
+*Save label*). The answer is written to `datasets/eval.jsonl` as a human label
+(`labelled_by: "human"`), so the benchmark grows, and becomes more independent of
+the system it measures, simply through use. A relabel replaces that site's line
+and leaves every other line untouched; a label the agent had given is kept in the
+note rather than discarded. *Only findings I have not labelled* turns the page
+into a review queue. Evaluation reports now say how many labels came from whom.
+
+### Run it unattended
+
+```bash
+make ct-up                              # the local CT server
+uv run lookalike-hunter watch           # ingest, then capture → classify → alert every 5 min
+```
+
+`watch` streams Certificate Transparency continuously and, every
+`watch.interval_s` (300 s), captures the new Alerts in the container, classifies
+them and announces any phishing. That interval is the time from a certificate to
+a notification, which matters because phishing kits are often taken down within
+hours: the evaluation lost most of its phishing sites that way. A stage that
+fails (Docker down, model API unavailable) is logged and retried on the next
+cycle without stopping the loop; if the CT stream itself ends, `watch` exits with
+an error rather than carrying on with nothing to triage. Ctrl+C flushes the
+buffered matches before stopping.
+
+`watch --once` runs a single triage pass over what is already stored, without
+ingesting, which suits cron. `watch --no-ingest` keeps looping while `ingest`
+runs elsewhere.
+
 ## Visiting hostile sites safely
 
 The browser is the only component that runs attacker-controlled content, so it is
@@ -284,7 +313,8 @@ threshold is the wrong knob for that failure, not that 0.4 is a good setting.
   recorded per entry (`labelled_by`, `label_basis`) rather than left implicit. A
   benchmark whose ground truth comes from the author of the system under test
   deserves the caveat in the open; `docs/labelling-protocol.md` states the rules
-  used, so the labels can be audited or redone.
+  used, so the labels can be audited or redone. Labels confirmed or corrected in
+  the dashboard are recorded as `human`, and each report states the split.
 - **Two labels changed once the final URL was read.** `isupport-appie-mxn.com`
   renders a pixel-perfect iCloud sign-in page and redirects to Apple's real site;
   `imprentamorales.maicrosoft.eu` shows a password form on a Microsoft typosquat and

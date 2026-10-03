@@ -8,6 +8,7 @@ Verdicts are read from what the capture and classify commands already stored.
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -176,6 +177,7 @@ def run_evaluation(
         dataset_path=str(dataset_path),
         dataset_size=len(sites),
         unjudgeable=unjudgeable,
+        labelled_by=dict(Counter(s.labelled_by or "unrecorded" for s in sites)),
         generated_at=datetime.now(UTC),
         alert_threshold=alert_threshold,
         arms=results,
