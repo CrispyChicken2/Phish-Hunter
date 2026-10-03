@@ -11,7 +11,9 @@ import signal
 from pathlib import Path
 
 from lookalike_hunter.alert.runner import build_sinks, run_alerts
-from lookalike_hunter.capture.runner import run_captures
+from lookalike_hunter.capture.handoff import read_job
+from lookalike_hunter.capture.runner import run_captures, visit_in_docker, visit_in_process
+from lookalike_hunter.capture.visit import visit
 from lookalike_hunter.classify.base import Classifier, StubClassifier
 from lookalike_hunter.classify.mistral import MistralClassifier, list_vision_models
 from lookalike_hunter.classify.runner import run_classifications
@@ -92,14 +94,16 @@ def _dataset_targets(
 
 
 def cmd_capture(settings: Settings, args: argparse.Namespace) -> None:
-    # The one command that runs attacker code. Run by habit from the host shell,
-    # a browser exploit would land on the operator's own machine instead of in a
-    # throwaway container, so that has to be asked for explicitly.
-    if not os.environ.get(CAPTURE_CONTAINER_ENV) and not args.outside_container:
+    """Pick the targets, have the capture container visit them, import the results.
+
+    The browser runs in the container unless --outside-container is given: run
+    by habit from the host shell, a browser exploit would land on the operator's
+    own machine instead of in a throwaway container.
+    """
+    if os.environ.get(CAPTURE_CONTAINER_ENV):
         raise SystemExit(
-            "capture visits hostile sites and belongs in the hardened container:\n"
-            "    docker compose run --rm capture capture\n"
-            "Pass --outside-container to run it on this machine anyway."
+            "inside the capture container, run `visit`: `capture` runs on the host, "
+            "where the database is, and starts this container itself"
         )
     store = MatchStore(settings.db_path, settings.scoring.alert_threshold)
     targets = None
@@ -108,9 +112,27 @@ def cmd_capture(settings: Settings, args: argparse.Namespace) -> None:
             store, args.from_dataset, args.limit, settings.capture.recapture_after_h
         )
         log.info("capture.from_dataset", dataset=str(args.from_dataset), targets=len(targets))
+    executor = visit_in_process if args.outside_container else visit_in_docker
     with contextlib.suppress(KeyboardInterrupt):
-        stats = asyncio.run(run_captures(store, settings.capture, args.limit, targets))
-        log.info("capture.done_all", attempted=stats.attempted, succeeded=stats.succeeded)
+        stats = asyncio.run(run_captures(store, settings.capture, args.limit, targets, executor))
+        log.info(
+            "capture.done_all",
+            attempted=stats.attempted,
+            succeeded=stats.succeeded,
+            rejected=stats.rejected,
+            missing=stats.missing,
+        )
+
+
+def cmd_visit(settings: Settings, args: argparse.Namespace) -> None:
+    """Container side of `capture`: visit one job's hostnames, write the results."""
+    if not os.environ.get(CAPTURE_CONTAINER_ENV):
+        raise SystemExit(
+            "visit runs hostile pages and only runs inside the capture container; "
+            "use `capture` (or `capture --outside-container`) on this machine"
+        )
+    job = read_job(args.root, args.job_id)
+    asyncio.run(visit(job, args.root))
 
 
 def _build_classifier(settings: Settings) -> tuple[Classifier, str | None]:
@@ -388,6 +410,11 @@ def main(argv: list[str] | None = None) -> None:
         help="Visit hostile sites from this machine instead of the capture container",
     )
     capture.set_defaults(func=cmd_capture)
+
+    visit_cmd = sub.add_parser("visit", help="(capture container only) Visit one capture job")
+    visit_cmd.add_argument("job_id")
+    visit_cmd.add_argument("--root", type=Path, default=Path("/app/captures"))
+    visit_cmd.set_defaults(func=cmd_visit)
 
     classify = sub.add_parser("classify", help="Classify stored captures with the VLM backend")
     classify.add_argument("--limit", type=int, default=None)

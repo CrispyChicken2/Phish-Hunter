@@ -32,24 +32,33 @@ def test_capture_command_runs_with_nothing_pending(
     monkeypatch.setenv("LH_DB_PATH", str(tmp_path / "empty.duckdb"))
     config = str(ROOT / "configs" / "default.yaml")
 
-    # No alerts stored: the command must be a clean no-op, not a crash.
+    # No alerts stored: a clean no-op that starts no container, not a crash.
+    main(["--config", config, "capture"])
     main(["--config", config, "capture", "--outside-container"])
 
 
-def test_capture_refuses_to_run_outside_the_container_by_default(
+def test_visit_refuses_to_open_hostile_pages_outside_the_container(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A habitual run from the host shell would put a browser exploit on the host."""
-    monkeypatch.setenv("LH_DB_PATH", str(tmp_path / "empty.duckdb"))
     monkeypatch.delenv("LH_CAPTURE_CONTAINER", raising=False)
     config = str(ROOT / "configs" / "default.yaml")
 
-    with pytest.raises(SystemExit, match="hardened container"):
+    with pytest.raises(SystemExit, match="only runs inside the capture container"):
+        main(["--config", config, "visit", "any-job", "--root", str(tmp_path)])
+
+
+def test_capture_is_not_run_inside_the_container(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The container has no database: the host picks targets and imports results."""
+    monkeypatch.setenv("LH_DB_PATH", str(tmp_path / "empty.duckdb"))
+    monkeypatch.setenv("LH_CAPTURE_CONTAINER", "1")
+    config = str(ROOT / "configs" / "default.yaml")
+
+    with pytest.raises(SystemExit, match="run `visit`"):
         main(["--config", config, "capture"])
     assert not (tmp_path / "empty.duckdb").exists()
-
-    monkeypatch.setenv("LH_CAPTURE_CONTAINER", "1")
-    main(["--config", config, "capture"])  # the image sets this; no flag needed there
 
 
 def test_classify_then_verdicts_output(

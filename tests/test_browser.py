@@ -204,6 +204,30 @@ async def test_webrtc_cannot_send_udp_to_a_stun_server_on_the_lan(tmp_path: Path
 
 
 @needs_chromium
+async def test_what_the_container_visits_is_what_the_host_imports(
+    tmp_path: Path, fake_site: int
+) -> None:
+    """The real visit → results file → validation chain, minus only the container."""
+    from lookalike_hunter.capture.handoff import import_results, new_job
+    from lookalike_hunter.capture.visit import visit
+
+    job = new_job(
+        [f"127.0.0.1:{fake_site}"],
+        CaptureConfig(timeout_s=10, block_private_networks=False),
+    )
+
+    await visit(job, tmp_path)
+    report = import_results(tmp_path, job)
+
+    assert report.rejected == []
+    [result] = report.results
+    assert result.status is CaptureStatus.OK
+    assert result.screenshot_path is not None
+    assert (tmp_path / result.screenshot_path).read_bytes().startswith(b"\x89PNG")
+    assert result.signals is not None and result.signals.has_login_form
+
+
+@needs_chromium
 async def test_capture_reports_dns_failure_without_crashing(tmp_path: Path) -> None:
     config = CaptureConfig(output_dir=tmp_path, timeout_s=10)
     async with BrowserCapturer(config) as capturer:

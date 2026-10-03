@@ -57,17 +57,21 @@ services:
 ### Capture and classify
 
 ```bash
-# Visit pending alerts from the hardened container and store screenshots.
-docker compose run --rm capture capture --limit 10
+# Visit pending alerts in the hardened container and store screenshots.
+# Needs Docker running; the image is built on first use.
+uv run lookalike-hunter capture --limit 10
 
 # Turn captures into verdicts (stub backend needs no API key).
 uv run lookalike-hunter classify
 uv run lookalike-hunter verdicts --label phishing
 ```
 
-`capture` is the one command that runs attacker code, so it refuses to start
-outside the capture container. `--outside-container` overrides that; it puts a
-browser exploit, if a page carries one, on your own machine.
+`capture` runs on your machine but never opens a page there. It picks the
+targets from the database, writes a job file, and starts the capture container,
+which visits them and writes screenshots plus a results file. The host then
+validates every result before it becomes a row. The container never sees the
+database. `--outside-container` runs the browser in-process instead, which puts
+a browser exploit, if a page carries one, on your own machine.
 
 To use a real vision model, put your key in `.env` (never in the YAML):
 
@@ -131,18 +135,19 @@ treated as expendable:
 
 | Layer | Measure |
 |---|---|
-| Container | Separate image, non-root `pwuser`, all capabilities dropped, `no-new-privileges`, read-only root filesystem + tmpfs, 2 GB memory and 512 PID caps, only `./data` mounted |
+| Container | Separate image, non-root `pwuser`, all capabilities dropped, `no-new-privileges`, read-only root filesystem + tmpfs, 2 GB memory and 512 PID caps. Its only mount is the capture directory: no database, no configuration, no dataset |
 | Browser | Chromium sandbox **enabled** (Playwright disables it by default), fresh context per site, 15 s timeout, downloads refused, dialogs auto-dismissed |
 | Behaviour | Never fills a form, never submits credentials, never follows links: load, screenshot, read the DOM, leave |
 | Network | Non-`http(s)` schemes refused; every request's host is resolved and blocked if it is loopback, private, link-local or cloud metadata, so a redirect cannot make our browser probe your LAN. WebSockets go through the same check (Playwright's request filter does not see them), and WebRTC's direct UDP is disabled, since a STUN server at a private address would otherwise reach the LAN; both bypasses were reproduced before being closed and are regression-tested |
-| Launch | `capture` refuses to run outside the container unless told `--outside-container` |
+| Launch | The browser runs only in the container (`visit` refuses to start anywhere else); `capture --outside-container` is the explicit way round it |
 
 What the browser leaves behind is treated as hostile too, because the host reads it:
 
 | Output | Measure |
 |---|---|
 | Page source | Saved as `.html.txt`, so a double-click opens a text editor rather than running the kit from `file://` |
-| Stored paths | The database is written from inside the container. A screenshot path is resolved, symlinks included, and refused unless it lands under the capture directory, so a tampered row cannot make the host upload `~/.ssh/id_rsa` to the model API or show it in the dashboard |
+| Results | Only the host writes the database. Each result the container returns is checked before it becomes a row: a hostname the job asked about, once each, at a URL that hostname would be visited at, every field typed and size-bounded, the results file a regular file (not a symlink), and a screenshot that is a PNG under the capture directory. Refused lines are logged and the file kept for inspection |
+| Stored paths | Resolved again whenever the host reads a file, symlinks included, and refused unless they land under the capture directory, so a tampered path cannot make the host upload `~/.ssh/id_rsa` to the model API or show it in the dashboard |
 | Terminal | Control characters stripped from everything printed |
 | Notifications | Defanged and stripped of chat markup (see Alerting) |
 | Dashboard | Hostile text rendered as plain text: Markdown would turn `[x](url)` into a link and `![](url)` into a request to the attacker's server. Bound to localhost |
@@ -320,12 +325,12 @@ Security caveats that hardening does not remove:
 - **DNS rebinding** can still defeat the private-address check, since Chromium
   resolves each host again after we do. Closing it properly needs an egress proxy
   that resolves once, checks the address and connects to that same address.
-- **The capture container has `./data` mounted read-write**, including the DuckDB
-  file the host opens. The host no longer trusts the file paths in it, but someone
-  who escaped both Chromium's sandbox and the browser process could still write
-  false rows or a deliberately malformed database file. Splitting the mounts, so
-  the container writes captures and a results file the host imports, would remove
-  that.
+- **A compromised container can still lie within the rules.** The host refuses
+  results for hostnames it did not ask about, malformed or oversized fields,
+  symlinks and screenshots that are not PNGs inside the capture directory. It
+  cannot tell a true result from a plausible false one, though: someone who
+  escaped Chromium's sandbox could report a phishing site as unreachable, or
+  supply a crafted PNG that the dashboard's image decoder then parses.
 - **Captures are never pruned**, so disk use grows without bound.
 - **A page's own text reaches the classifier prompt.** It is fenced and labelled
   as untrusted data, but cannot be made injection-proof: a page can still talk the

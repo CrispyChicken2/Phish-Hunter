@@ -373,8 +373,10 @@ class MatchStore:
                     result.duration_ms,
                     result.final_url,
                     result.http_status,
-                    str(result.screenshot_path) if result.screenshot_path else None,
-                    str(result.html_path) if result.html_path else None,
+                    # Forward slashes whatever the OS: Windows reads them, Linux
+                    # does not read backslashes, and the DB moves between both.
+                    result.screenshot_path.as_posix() if result.screenshot_path else None,
+                    result.html_path.as_posix() if result.html_path else None,
                     json.dumps(asdict(result.signals)) if result.signals else None,
                     result.error,
                 ],

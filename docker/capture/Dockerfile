@@ -5,8 +5,8 @@ FROM mcr.microsoft.com/playwright/python:v1.63.0-noble
 # Pinned: the image must build the same way tomorrow as today.
 COPY --from=ghcr.io/astral-sh/uv:0.11.21 /uv /usr/local/bin/uv
 
-# LH_CAPTURE_CONTAINER tells `lookalike-hunter capture` it is in the sandbox it
-# insists on; nothing else sets it.
+# LH_CAPTURE_CONTAINER is what lets `lookalike-hunter visit` run: it refuses to
+# open hostile pages anywhere else. Nothing else sets it.
 ENV LH_CAPTURE_CONTAINER=1 \
     PYTHONUNBUFFERED=1 \
     UV_LINK_MODE=copy \
@@ -36,4 +36,5 @@ RUN uv sync --locked --no-dev
 USER pwuser
 
 ENTRYPOINT ["lookalike-hunter"]
-CMD ["capture"]
+# The host passes the job: `lookalike-hunter capture` runs `visit <job-id>`.
+CMD ["visit", "--help"]
