@@ -1,10 +1,27 @@
 # The instance (ADR 0001, ADR 0002 option A). Provisioning (Docker, uv, systemd) is
 # P1.4 and is not here yet, so changing it later replaces the instance on purpose.
 
-# Latest Amazon Linux 2023 image for arm64, published by AWS as a public SSM parameter.
-# Reading it needs a credential at plan time, but no change is made to AWS.
-data "aws_ssm_parameter" "al2023_arm64" {
-  name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64"
+# Latest Amazon Linux 2023 image for arm64, owned by Amazon. Looked up with a read of
+# the image catalogue (ec2:DescribeImages), which the read-only plan role is allowed.
+# Reading the public SSM parameter instead needs ssm:GetParameter, which that role lacks.
+data "aws_ami" "al2023_arm64" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["al2023-ami-2023.*-kernel-*-arm64"]
+  }
+
+  filter {
+    name   = "architecture"
+    values = ["arm64"]
+  }
+
+  filter {
+    name   = "state"
+    values = ["available"]
+  }
 }
 
 # The role the instance assumes. Only the SSM core policy for now: it is the only way
@@ -35,7 +52,7 @@ resource "aws_iam_instance_profile" "instance" {
 resource "aws_instance" "main" {
   # checkov:skip=CKV_AWS_126: detailed monitoring is a per-instance charge outside the
   # budget. Disk and memory alarms come from the CloudWatch agent in P1.9 instead.
-  ami                    = data.aws_ssm_parameter.al2023_arm64.value
+  ami                    = data.aws_ami.al2023_arm64.id
   instance_type          = var.instance_type
   subnet_id              = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.instance.id]
