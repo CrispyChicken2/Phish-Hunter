@@ -1,6 +1,8 @@
 # ADR 0002: Cost ceiling of $15 per month
 
-- **Status:** Proposed. Waiting for the owner to choose an option (see Decision).
+- **Status:** Accepted for option A (full pipeline on AWS, budget raised to $20 per
+  month), chosen by the owner on 2026-10-17. Conditions below must pass before P1.3 is
+  closed.
 - **Date:** 2026-10-17
 - **Decided by:** project owner
 - **Amends:** ADR 0001 (instance sizing and budget)
@@ -54,8 +56,11 @@ measured.
 
 ### Why A does not fit
 
-A t4g.small is the smallest size with enough memory for the 2 GiB Chromium cap, and it
-already costs $12.56 for compute. The public IPv4 address and the disk take it past $15
+A t4g.small is the smallest size that can host the 2 GiB Chromium cap at all, and it
+already costs $12.56 for compute. Correction: it does not hold the cap with room to spare.
+The cap is a ceiling. The operating system, `certstream-server-go` and the Python
+consumer also need memory from the same 2 GiB, so a full capture can run out of memory.
+That is why option A below carries conditions. The public IPv4 address and the disk take it past $15
 before any logs or screenshots. Only the unverified IPv6-only design (A') gets close, and
 it has no margin for the first month of logs and screenshots.
 
@@ -93,23 +98,38 @@ from the owner before it is accepted.
    always-on instance, but it replaces the ingest design and the local certstream server, and
    it has unknown volume and rate-limit costs. That is a redesign and needs its own ADR.
 
-## Decision (for the owner)
+## Decision
 
-Choose one of these:
+**Option A, budget raised to $20 per month** (owner's choice, 2026-10-17). The full
+pipeline, including Chromium capture, runs on one t4g.small. The estimate is about $18.90
+per month, with the unverified IPv4 price included. $20 leaves a small margin for logs and
+storage growth.
 
-1. **Option B, with capture on the owner's PC (recommended to start).** Lowest cost, about
-   $12.6/month. Measure the t4g.micro memory first (P1.3), then decide how often capture runs.
-2. **Option D.** Adds a capture host started for short runs, about $13.1/month. More
-   automation and IAM, so a second ADR for the scheduler.
-3. **Raise the budget** to fit Option A (about $19), or to fit A' if IPv6 works.
+Conditions, all to be checked before P1.3 closes:
+
+1. **arm64 capture image: verified.** `mcr.microsoft.com/playwright/python:v1.63.0-noble`
+   has `linux/arm64` and `linux/amd64` manifests (`docker manifest inspect`). The uv image
+   (`ghcr.io/astral-sh/uv:0.11.21`) and the certstream image
+   (`0rickyy0/certstream-server-go:v1.10.1`) must be checked the same way. The capture
+   container cannot be built here yet because the Docker daemon is off.
+2. **Memory under real load.** Run a full capture cycle on the t4g.small and record peak
+   memory. Add swap on the EBS volume (about 2 GiB) as a safety net against out-of-memory
+   kills. Swap is slower, so it is a fallback, not a plan.
+3. **CPU credits.** The t4g family is burstable. Record the credit balance under load
+   during the same test.
+4. **If the memory test fails:** fall back to option B, budget $15, with capture on the
+   owner's PC. This is a new decision and needs its own note.
+
+Not chosen: option B (cheaper, but no capture on AWS) and option D (more automation).
+A' (IPv6-only) stays unverified and is not used.
 
 Whatever the choice, the project keeps one codebase with a configuration profile (idea 1),
 unless the owner asks for a branch.
 
 ## Consequences
 
-- Terraform and the instance size depend on the choice above.
-- The budget of $15 is a limit, not a target. P1.10 must set the budget in Terraform,
-  with the figures above and the unverified IPv4 price confirmed.
+- The budget becomes $20 in the Terraform budget resource (P1.10). The existing console
+  budget is set to $15 and must be updated to match.
+- The instance is t4g.small, not the t3.large in ADR 0001. ADR 0001 is amended by this note.
 - Every figure in this ADR is from the pricing query or is marked as unverified. The
   unverified figures do not go into the README.
