@@ -15,3 +15,11 @@ data/*
 docker/local-ca/*
 !docker/local-ca/.gitkeep
 docker-compose.override.yml
+# Terraform: state records the AWS account and the budget e-mail, and a local
+# variables file holds the e-mail itself. None of it is committed.
+*.tfstate
+*.tfstate.*
+*.tfplan
+.terraform/
+*.tfvars
+crash.log
