@@ -1,6 +1,6 @@
-# Inputs. Values that identify the owner (the budget e-mail) have no default and are
-# never written into this repository: pass them with TF_VAR_<name> or a git-ignored
-# terraform.tfvars file (see .gitignore).
+# Inputs. Values that identify the owner (such as the budget e-mail, added in P1.10)
+# must never be written into this repository: pass them with TF_VAR_<name> or a
+# git-ignored terraform.tfvars file (see .gitignore).
 
 variable "region" {
   description = "AWS region for every resource (ADR 0001)."
@@ -42,12 +42,6 @@ variable "budget_limit_usd" {
   description = "Monthly cost ceiling in USD (ADR 0002, option A)."
   type        = number
   default     = 20
-}
-
-variable "budget_email" {
-  description = "E-mail address for budget alerts. Not stored in the repository."
-  type        = string
-  sensitive   = true
 }
 
 variable "capture_retention_days" {
