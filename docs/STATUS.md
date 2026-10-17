@@ -83,7 +83,7 @@ Status: `todo`, `doing`, `review` (PR open), `done`, `blocked`.
 | P1.9 | Observability: JSON logs to CloudWatch Logs; alarms for no certificate in 10 min, repeated failed `watch` cycles, disk > 80% | todo | Needs a metric filter and the CloudWatch agent for disk |
 | P1.10 | Cost: `aws_budgets_budget` with e-mail alert (variable); `docs/costs.md` itemised with assumptions | todo | Figures checked by the user in the AWS pricing calculator |
 | P1.11 | CI: `terraform fmt -check`, `terraform validate`, checkov or tfsec; no AWS credentials in CI | todo | Pin the actions to SHAs |
-| P1.12 | `terraform plan` runs cleanly; plan output attached to the PR | todo | ⏸ after plan passes. User runs `apply` |
+| P1.12 | `terraform plan` runs cleanly; plan output attached to the PR | review | Plan passed on 2026-10-18 with the read-only login: 11 to add, 0 to change, 0 to destroy (AMI ami-03b62828ff895bd49). ⏸ waiting for the owner to apply, which needs a write-capable login |
 | P1.13 | `docs/deploy-aws.md` runbook (prerequisites, secrets, apply, verify, dashboard tunnel, code update, destroy); README section and cloud diagram | todo | The user follows it without help |
 
 ### Phase 2: measurement
