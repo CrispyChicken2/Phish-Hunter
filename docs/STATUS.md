@@ -130,8 +130,10 @@ Status: `todo`, `doing`, `review` (PR open), `done`, `blocked`.
       (`aws configure sso` or `aws configure --profile lh-plan`, policy
       `ReadOnlyAccess`). Keys are typed into your terminal only, never pasted in chat
       or committed. Tell the agent the profile name.
-- [x] **Budget:** $15/month ceiling (confirmed 2026-10-17). Option to take: ADR 0002.
-- [ ] **ADR 0002 decision:** choose option 1, 2 or 3 in `docs/adr/0002-cost-ceiling-15-usd.md`.
+- [x] **Budget:** raised to $20/month, option A (ADR 0002, accepted 2026-10-17). The
+      console budget still says $15 and must be updated in P1.10.
+- [ ] **ADR 0002 conditions:** arm64 check of the other two images, memory and CPU-credit
+      test under load, swap. Owner's fallback if the memory test fails: option B at $15.
 - [x] **P1.10 budget e-mail:** given privately, kept out of the repo (see the
       `*.tfvars` rule in `.gitignore`).
 - [ ] **P1.10:** decide whether Terraform manages the existing AWS Budget (import) or
