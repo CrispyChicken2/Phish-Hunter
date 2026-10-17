@@ -50,6 +50,9 @@ resource "aws_iam_instance_profile" "instance" {
 }
 
 resource "aws_instance" "main" {
+  # checkov:skip=CKV_AWS_46: the flagged text is the public commit id and the uv release
+  # checksum (long hex strings), not credentials. The script was checked by reading: no
+  # key, token or webhook value is in it. Secrets come from SSM in P1.5.
   # checkov:skip=CKV_AWS_126: detailed monitoring is a per-instance charge outside the
   # budget. Disk and memory alarms come from the CloudWatch agent in P1.9 instead.
   ami                    = data.aws_ami.al2023_arm64.id
@@ -58,6 +61,19 @@ resource "aws_instance" "main" {
   vpc_security_group_ids = [aws_security_group.instance.id]
   iam_instance_profile   = aws_iam_instance_profile.instance.name
   ebs_optimized          = true
+
+  # First-boot provisioning (P1.4). Pinned values only, no secret.
+  user_data = templatefile("${path.module}/provision.sh.tftpl", {
+    repo_commit      = var.repo_commit
+    uv_version       = var.uv_version
+    uv_sha256        = var.uv_sha256
+    certstream_image = var.certstream_image
+  })
+
+  # user_data only runs at first boot. Changing it must replace the instance, or the
+  # change would silently never run. Safe while the database is empty. Once P1.7 backups
+  # exist, this becomes a deliberate decision.
+  user_data_replace_on_change = true
 
   # No key pair: access is through SSM Session Manager only.
   key_name = null

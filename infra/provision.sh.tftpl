@@ -1,0 +1,102 @@
+#!/bin/bash
+# First-boot provisioning of the lookalike-hunter instance (P1.4). Runs once, as root.
+#
+# Everything it downloads is pinned: the repository commit and the uv release checksum.
+# It contains no secret. The API key and webhook arrive from SSM in P1.5, which is also
+# when the watch service is started.
+set -euo pipefail
+
+REPO_URL="https://github.com/CrispyChicken2/Phish-Hunter.git"
+REPO_COMMIT="${repo_commit}"
+UV_VERSION="${uv_version}"
+UV_SHA256="${uv_sha256}"
+CERTSTREAM_IMAGE="${certstream_image}"
+
+# 1. Swap: 2 GiB, as ADR 0002 requires. The instance has 1.8 GiB of RAM and no swap.
+if [ ! -f /swapfile ]; then
+  fallocate -l 2G /swapfile
+  chmod 600 /swapfile
+  mkswap /swapfile
+  echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+swapon -a
+
+# 2. Packages from Amazon Linux's own repository.
+dnf install -y docker git
+systemctl enable --now docker
+
+# 3. uv, verified against the checksum before it is run.
+mkdir -p /tmp/uv-install
+curl -fsSLo /tmp/uv-install/uv.tar.gz \
+  "https://github.com/astral-sh/uv/releases/download/$UV_VERSION/uv-aarch64-unknown-linux-gnu.tar.gz"
+echo "$UV_SHA256  /tmp/uv-install/uv.tar.gz" | sha256sum -c -
+tar -xzf /tmp/uv-install/uv.tar.gz -C /tmp/uv-install
+install -m 0755 /tmp/uv-install/uv-aarch64-unknown-linux-gnu/uv /usr/local/bin/uv
+rm -rf /tmp/uv-install
+
+# 4. Service user: no login shell, its own home for the database and captures.
+#    Membership in the docker group is root-equivalent on the host. The browser runs
+#    inside a container, so this is a deliberate trade-off, to be revisited (see ADR 0002).
+if ! id lookalike >/dev/null 2>&1; then
+  useradd --system --home-dir /var/lib/lookalike-hunter --shell /sbin/nologin lookalike
+fi
+usermod -aG docker lookalike
+install -d -o lookalike -g lookalike -m 0750 /var/lib/lookalike-hunter
+install -d -o lookalike -g lookalike -m 0750 /var/lib/lookalike-hunter/captures
+
+# 5. The code, at exactly the pinned commit.
+if [ ! -d /opt/lookalike-hunter/.git ]; then
+  git clone "$REPO_URL" /opt/lookalike-hunter
+fi
+git -C /opt/lookalike-hunter fetch --quiet origin
+git -C /opt/lookalike-hunter checkout --quiet --detach "$REPO_COMMIT"
+test "$(git -C /opt/lookalike-hunter rev-parse HEAD)" = "$REPO_COMMIT"
+chown -R lookalike:lookalike /opt/lookalike-hunter
+
+# Dependencies from the lockfile, as CI does (--locked refuses any drift).
+runuser -u lookalike -- env HOME=/var/lib/lookalike-hunter \
+  bash -c 'cd /opt/lookalike-hunter && uv sync --locked --no-dev'
+
+# 6. Certificate Transparency server, reachable from localhost only.
+cat > /etc/systemd/system/lookalike-certstream.service <<UNIT
+[Unit]
+Description=Local Certificate Transparency server (certstream-server-go)
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+ExecStartPre=-/usr/bin/docker rm -f lookalike-certstream
+ExecStart=/usr/bin/docker run --rm --name lookalike-certstream -p 127.0.0.1:8080:8080 $CERTSTREAM_IMAGE
+ExecStop=/usr/bin/docker stop lookalike-certstream
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+# 7. The watch loop. Installed but not started: it needs the API key and the webhook,
+#    which P1.5 provides from SSM. Starting it earlier would only crash-loop.
+cat > /etc/systemd/system/lookalike-watch.service <<UNIT
+[Unit]
+Description=lookalike-hunter watch (ingest, capture, classify, alert)
+After=lookalike-certstream.service docker.service
+Requires=lookalike-certstream.service docker.service
+
+[Service]
+User=lookalike
+Group=lookalike
+WorkingDirectory=/opt/lookalike-hunter
+Environment=LH_PROFILE=aws
+Environment=LH_CAPTURES_DIR=/var/lib/lookalike-hunter/captures
+ExecStart=/opt/lookalike-hunter/.venv/bin/lookalike-hunter watch
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+systemctl daemon-reload
+systemctl enable --now lookalike-certstream.service

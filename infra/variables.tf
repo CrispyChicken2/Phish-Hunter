@@ -38,6 +38,30 @@ variable "root_volume_gb" {
   default     = 20
 }
 
+variable "repo_commit" {
+  description = "Exact repository commit the instance runs (pinned; updates are deliberate)."
+  type        = string
+  default     = "6e3925cd88ec7d40827e30c9fd854fc2cd583aa0"
+}
+
+variable "uv_version" {
+  description = "uv release installed on the instance (same as the capture image)."
+  type        = string
+  default     = "0.11.21"
+}
+
+variable "uv_sha256" {
+  description = "SHA-256 of the uv release tarball for arm64, from the official release."
+  type        = string
+  default     = "88e800834007cc5efd4675f166eb2a51e7e3ad19876d85fa8805a6fb5c922397"
+}
+
+variable "certstream_image" {
+  description = "Certificate Transparency server image, same tag as docker-compose.yml."
+  type        = string
+  default     = "0rickyy0/certstream-server-go:v1.10.1"
+}
+
 variable "budget_limit_usd" {
   description = "Monthly cost ceiling in USD (ADR 0002, option A)."
   type        = number
