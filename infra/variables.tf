@@ -26,6 +26,18 @@ variable "availability_zone" {
   default     = "eu-north-1a"
 }
 
+variable "instance_type" {
+  description = "EC2 instance type (ADR 0002, option A): Graviton, 2 GiB RAM."
+  type        = string
+  default     = "t4g.small"
+}
+
+variable "root_volume_gb" {
+  description = "Encrypted gp3 volume for the OS, the DuckDB database and captures."
+  type        = number
+  default     = 20
+}
+
 variable "budget_limit_usd" {
   description = "Monthly cost ceiling in USD (ADR 0002, option A)."
   type        = number

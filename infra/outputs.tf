@@ -10,6 +10,11 @@ output "public_subnet_id" {
   value       = aws_subnet.public.id
 }
 
+output "instance_id" {
+  description = "The instance. Connect with: aws ssm start-session --target <id>"
+  value       = aws_instance.main.id
+}
+
 output "instance_security_group_id" {
   description = "Security group with no inbound rules, for the instance."
   value       = aws_security_group.instance.id
