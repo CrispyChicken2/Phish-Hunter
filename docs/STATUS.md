@@ -122,4 +122,15 @@ Status: `todo`, `doing`, `review` (PR open), `done`, `blocked`.
 - Instance type: must hold Chromium (2 GB container cap, up to 20 captures per run)
   plus the Python consumer at 1–2k certificates/s.
 - Capture retention: default duration for the S3 lifecycle rule.
-- AWS region.
+- AWS region: `eu-north-1` (Stockholm), set by the user.
+
+## Actions for the user (not for the agent)
+
+- [ ] **P1.12 (before `terraform plan`):** create a read-only AWS profile on your PC
+      (`aws configure sso` or `aws configure --profile lh-plan`, policy
+      `ReadOnlyAccess`). Keys are typed into your terminal only, never pasted in chat
+      or committed. Tell the agent the profile name.
+- [ ] **P1.10:** the budget limit amount, and the e-mail address for budget alerts.
+- [ ] **P1.5 (after P1.12):** enter `MISTRAL_API_KEY` and `LH_ALERT__WEBHOOK_URL` into
+      SSM Parameter Store as SecureString, by hand.
+- [ ] **P1.12:** run `terraform apply` yourself. The agent never applies.
