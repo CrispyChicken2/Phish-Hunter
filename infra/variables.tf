@@ -8,6 +8,24 @@ variable "region" {
   default     = "eu-north-1"
 }
 
+variable "vpc_cidr" {
+  description = "Address range of the dedicated VPC."
+  type        = string
+  default     = "10.0.0.0/16"
+}
+
+variable "public_subnet_cidr" {
+  description = "Address range of the single public subnet."
+  type        = string
+  default     = "10.0.0.0/24"
+}
+
+variable "availability_zone" {
+  description = "Availability zone of the subnet (one zone, so no multi-AZ cost)."
+  type        = string
+  default     = "eu-north-1a"
+}
+
 variable "budget_limit_usd" {
   description = "Monthly cost ceiling in USD (ADR 0002, option A)."
   type        = number
