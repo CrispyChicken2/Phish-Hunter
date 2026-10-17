@@ -1,4 +1,4 @@
-.PHONY: install lint format typecheck test check ct-up ct-down run replay dashboard
+.PHONY: install lint format typecheck test check ct-up ct-down run replay dashboard tf-fmt tf-validate tf-plan
 
 install:
 	uv sync --all-extras
@@ -34,3 +34,15 @@ replay:
 # Review UI on http://localhost:8501 only; .streamlit/config.toml keeps it off the LAN.
 dashboard:
 	uv run --extra dashboard streamlit run src/lookalike_hunter/dashboard/app.py
+
+# Terraform (infra/). tf-fmt and tf-validate need no AWS credentials. tf-plan does, and
+# is run by the owner, never by CI.
+tf-fmt:
+	terraform -chdir=infra fmt -check -recursive
+
+tf-validate:
+	terraform -chdir=infra init -backend=false -input=false
+	terraform -chdir=infra validate
+
+tf-plan:
+	terraform -chdir=infra plan -input=false
