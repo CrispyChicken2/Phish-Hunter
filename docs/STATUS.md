@@ -73,7 +73,7 @@ Status: `todo`, `doing`, `review` (PR open), `done`, `blocked`.
 |---|---|---|---|
 | P1.0 | ADR 0001: single-instance deployment (why, cost, limits, scale path) | review | `docs/adr/0001-single-instance-deployment.md`, Proposed. Amended by ADR 0002 (cost ceiling). ⏸ waiting for the ADR 0002 decision and approval |
 | P1.1 | Terraform skeleton: provider and version pins, variables, tags, no credentials in code; `make tf-plan` | review | Done: `infra/`, `make tf-fmt`, `make tf-validate`, `make tf-plan`. Local `validate` blocked by an x509 error (antivirus, likely), so it runs in CI. Local state, as decided |
-| P1.2 | Network: small VPC, one public subnet, no ingress rule, no NAT Gateway | todo | Egress needed for Docker pulls, git clone, uv, Mistral API, webhook |
+| P1.2 | Network: small VPC, one public subnet, no ingress rule, no NAT Gateway | review | Done in `infra/network.tf`. Checkov: 9 passed, 0 failed, 4 skipped with reasons in the code (public IP, open egress, SG not yet attached, no flow logs). `validate`/`plan` need CI or your login |
 | P1.3 | EC2 instance: type justified in ADR; IMDSv2 required, hop limit 1; encrypted EBS volume for DuckDB; no SSH key | todo | Access via SSM Session Manager only |
 | P1.4 | Provisioning: user_data installs Docker and uv, clones the repo at a pinned commit, creates systemd units for certstream and `watch` with restart | todo | No secret in user_data |
 | P1.5 | Secrets: IAM read permission on two named SSM SecureString parameters; values entered by hand; read at service start, never on disk in clear or in logs | todo | Terraform never reads the values (keeps them out of state) |
