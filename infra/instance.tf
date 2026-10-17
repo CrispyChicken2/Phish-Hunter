@@ -81,4 +81,11 @@ resource "aws_instance" "main" {
   tags = {
     Name = "lookalike-hunter"
   }
+
+  # The lookup above takes the newest image. Without this, a new Amazon Linux release
+  # would make every later plan replace the instance, and the root disk holds the
+  # database. Updating the image becomes a deliberate change, not a side effect.
+  lifecycle {
+    ignore_changes = [ami]
+  }
 }
