@@ -1,0 +1,18 @@
+# AWS profile (ADR 0002, option A). Loaded with LH_PROFILE=aws on top of
+# configs/default.yaml, which it overrides key by key. State only what differs.
+# Paths are fixed because the systemd services run from /opt and keep their data in
+# /var/lib, not in the repository checkout.
+
+db_path: /var/lib/lookalike-hunter/lookalike.duckdb
+dataset_path: /var/lib/lookalike-hunter/eval.jsonl
+
+capture:
+  output_dir: /var/lib/lookalike-hunter/captures
+
+alert:
+  file_path: /var/lib/lookalike-hunter/alerts.jsonl
+
+# The local default is the offline stub. The instance runs the real model, as the
+# README describes for the Mistral free tier (no paid tier without approval).
+classify:
+  backend: mistral

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from typing import Literal
 
@@ -182,16 +183,40 @@ class Settings(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
-        yaml_path = Path(os.environ.get("LH_CONFIG", DEFAULT_CONFIG_PATH))
+        base = Path(os.environ.get("LH_CONFIG", DEFAULT_CONFIG_PATH))
         return (
             init_settings,
             env_settings,
             dotenv_settings,  # .env holds secrets such as MISTRAL_API_KEY
-            YamlConfigSettingsSource(settings_cls, yaml_file=yaml_path),
+            YamlConfigSettingsSource(settings_cls, yaml_file=_yaml_files(base), deep_merge=True),
         )
 
 
-def load_settings(config_path: Path | None = None) -> Settings:
+PROFILE_ENV = "LH_PROFILE"
+_PROFILE_NAME = re.compile(r"[a-z0-9_-]+")
+
+
+def _yaml_files(base: Path) -> list[Path]:
+    """The base file, then the profile overlay (e.g. `configs/aws.yaml`) if one is set.
+
+    The overlay is read from the base file's directory and merged over it, so a profile
+    only states what differs. The name is restricted to plain letters, digits, `-` and
+    `_`: it comes from the environment and must not select an arbitrary file.
+    """
+    profile = os.environ.get(PROFILE_ENV, "")
+    if not profile:
+        return [base]
+    if not _PROFILE_NAME.fullmatch(profile):
+        raise ValueError(f"{PROFILE_ENV} must be a plain name such as 'aws', not {profile!r}")
+    overlay = base.parent / f"{profile}.yaml"
+    if not overlay.is_file():
+        raise FileNotFoundError(f"profile {profile!r} has no file at {overlay}")
+    return [base, overlay]
+
+
+def load_settings(config_path: Path | None = None, profile: str | None = None) -> Settings:
     if config_path is not None:
         os.environ["LH_CONFIG"] = str(config_path)
+    if profile is not None:
+        os.environ[PROFILE_ENV] = profile
     return Settings()
