@@ -71,7 +71,7 @@ Status: `todo`, `doing`, `review` (PR open), `done`, `blocked`.
 
 | ID | Ticket | Status | Notes |
 |---|---|---|---|
-| P1.0 | ADR 0001: single-instance deployment (why, cost, limits, scale path) | todo | ⏸ before any Terraform |
+| P1.0 | ADR 0001: single-instance deployment (why, cost, limits, scale path) | review | `docs/adr/0001-single-instance-deployment.md`, Proposed. ⏸ waiting for the budget decision and approval |
 | P1.1 | Terraform skeleton: provider and version pins, variables, tags, no credentials in code; `make tf-plan` | todo | Remote state location decided in the ADR (chicken-and-egg with a state bucket) |
 | P1.2 | Network: small VPC, one public subnet, no ingress rule, no NAT Gateway | todo | Egress needed for Docker pulls, git clone, uv, Mistral API, webhook |
 | P1.3 | EC2 instance: type justified in ADR; IMDSv2 required, hop limit 1; encrypted EBS volume for DuckDB; no SSH key | todo | Access via SSM Session Manager only |
@@ -130,7 +130,11 @@ Status: `todo`, `doing`, `review` (PR open), `done`, `blocked`.
       (`aws configure sso` or `aws configure --profile lh-plan`, policy
       `ReadOnlyAccess`). Keys are typed into your terminal only, never pasted in chat
       or committed. Tell the agent the profile name.
-- [ ] **P1.10:** the budget limit amount, and the e-mail address for budget alerts.
+- [ ] **Budget decision (ADR 0001):** a 24/7 instance costs more than the existing
+      $10 AWS Budget ("My Monthly Cost Budget"). Choose a new limit, or a run-when-needed
+      schedule, before P1.10.
+- [ ] **P1.10:** the budget alert e-mail address. Decide whether Terraform manages the
+      existing budget (import) or creates a second one.
 - [ ] **P1.5 (after P1.12):** enter `MISTRAL_API_KEY` and `LH_ALERT__WEBHOOK_URL` into
       SSM Parameter Store as SecureString, by hand.
 - [ ] **P1.12:** run `terraform apply` yourself. The agent never applies.
