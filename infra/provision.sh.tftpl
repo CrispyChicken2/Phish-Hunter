@@ -76,8 +76,21 @@ RestartSec=10
 WantedBy=multi-user.target
 UNIT
 
-# 7. The watch loop. Installed but not started: it needs the API key and the webhook,
-#    which P1.5 provides from SSM. Starting it earlier would only crash-loop.
+# 7. The watch loop (P1.5). Its secrets are read from SSM when it starts, by a wrapper
+#    that keeps them in the process environment only: nothing is written to disk, and
+#    nothing is printed. The unit stays disabled until the owner has created the
+#    parameters and enables it.
+cat > /usr/local/bin/lookalike-watch-run <<'WRAP'
+#!/bin/bash
+# Starts `watch` with its secrets in the process environment only.
+set -euo pipefail
+LH_MISTRAL_API_KEY=$(aws ssm get-parameter --name '${mistral_parameter_name}' --with-decryption --query Parameter.Value --output text)
+LH_ALERT__WEBHOOK_URL=$(aws ssm get-parameter --name '${webhook_parameter_name}' --with-decryption --query Parameter.Value --output text)
+export LH_MISTRAL_API_KEY LH_ALERT__WEBHOOK_URL
+exec /opt/lookalike-hunter/.venv/bin/lookalike-hunter watch
+WRAP
+chmod 0755 /usr/local/bin/lookalike-watch-run
+
 cat > /etc/systemd/system/lookalike-watch.service <<UNIT
 [Unit]
 Description=lookalike-hunter watch (ingest, capture, classify, alert)
@@ -90,7 +103,8 @@ Group=lookalike
 WorkingDirectory=/opt/lookalike-hunter
 Environment=LH_PROFILE=aws
 Environment=LH_CAPTURES_DIR=/var/lib/lookalike-hunter/captures
-ExecStart=/opt/lookalike-hunter/.venv/bin/lookalike-hunter watch
+Environment=AWS_REGION=${region}
+ExecStart=/usr/local/bin/lookalike-watch-run
 Restart=on-failure
 RestartSec=30
 

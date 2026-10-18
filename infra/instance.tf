@@ -64,10 +64,13 @@ resource "aws_instance" "main" {
 
   # First-boot provisioning (P1.4). Pinned values only, no secret.
   user_data = templatefile("${path.module}/provision.sh.tftpl", {
-    repo_commit      = var.repo_commit
-    uv_version       = var.uv_version
-    uv_sha256        = var.uv_sha256
-    certstream_image = var.certstream_image
+    repo_commit            = var.repo_commit
+    uv_version             = var.uv_version
+    uv_sha256              = var.uv_sha256
+    certstream_image       = var.certstream_image
+    region                 = var.region
+    mistral_parameter_name = var.mistral_parameter_name
+    webhook_parameter_name = var.webhook_parameter_name
   })
 
   # user_data only runs at first boot. Changing it must replace the instance, or the

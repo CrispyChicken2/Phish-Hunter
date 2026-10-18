@@ -62,6 +62,18 @@ variable "certstream_image" {
   default     = "0rickyy0/certstream-server-go:v1.10.1"
 }
 
+variable "mistral_parameter_name" {
+  description = "SSM SecureString holding the Mistral API key. Created by hand, never by Terraform."
+  type        = string
+  default     = "/lookalike-hunter/mistral-api-key"
+}
+
+variable "webhook_parameter_name" {
+  description = "SSM SecureString holding the alert webhook URL. Created by hand, never by Terraform."
+  type        = string
+  default     = "/lookalike-hunter/alert-webhook-url"
+}
+
 variable "budget_limit_usd" {
   description = "Monthly cost ceiling in USD (ADR 0002, option A)."
   type        = number
