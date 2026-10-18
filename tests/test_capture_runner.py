@@ -106,6 +106,7 @@ async def test_what_was_visited_before_a_crash_is_still_imported(
 
     assert captured_hosts(store) == ["evil.test"]
     assert stats.missing == 1
+    assert stats.execution_failed
 
 
 async def test_an_interrupted_run_still_imports_then_stops(

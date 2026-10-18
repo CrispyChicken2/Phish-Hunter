@@ -57,6 +57,9 @@ async def run_cycle(
     try:
         captured = await run_captures(store, settings.capture, executor=executor)
         stats.captured = captured.attempted
+        if captured.execution_failed:
+            # The runner logs the detail; here the failure must reach the cycle total.
+            stats.failed_stages += 1
     except Exception:
         stats.failed_stages += 1
         log.exception("watch.capture_failed")

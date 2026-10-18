@@ -55,6 +55,9 @@ class CaptureRunStats:
     rejected: int = 0
     # Targets with no accepted result: the container stopped early or lied.
     missing: int = 0
+    # The container did not run to completion. Reported to the caller, so a run that
+    # captures nothing is not mistaken for a quiet one.
+    execution_failed: bool = False
     by_status: Counter[str] = field(default_factory=Counter)
 
     @property
@@ -154,6 +157,7 @@ async def run_captures(
     try:
         await executor(job, root)
     except CaptureExecutionError as exc:
+        stats.execution_failed = True
         log.error("capture.execution_failed", job=job.job_id, error=str(exc))
     finally:
         # Also on Ctrl+C or a timeout: sites already visited are not lost.
