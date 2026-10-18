@@ -117,6 +117,9 @@ runbook (P1.13) before the instance is ever rebuilt:
 | Docker Buildx v0.38.0 plugin (`docker-buildx`), checksum-verified | `docker compose build` needs buildx 0.17+ | not in the setup script |
 | ACL on `/var/lib/lookalike-hunter/captures` for uid 1001 (the capture container's user) and uid 993 (the host's `lookalike`) | the container could not read job files | not in the setup script |
 | The watch process runs commit `6523718` (the failure counter fix) | the setup script still pins `6e3925c` | `repo_commit` in Terraform, to update at the next rebuild |
+| Archive timer and service from `deploy/` in `/etc/systemd/system`, enabled every 30 min (P1.6) | the setup script is not changed, since that would replace the instance | `deploy/` in the repository |
+| Drop-in `/etc/systemd/system/lookalike-archive.service.d/bucket.conf` with the bucket name | the bucket name is kept out of git | Terraform output `captures_bucket_name` |
+| The watch process and the archive run commit `d80e905` | P1.6 code | `repo_commit` in Terraform, to update at the next rebuild |
 
 ## Standing rules (from the mission)
 
