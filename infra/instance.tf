@@ -29,12 +29,41 @@ data "aws_ami" "al2023_arm64" {
 resource "aws_iam_role" "instance" {
   name = "lookalike-hunter-instance"
 
+  # Only EC2 may assume this role, and only for an instance in this account. Without the
+  # account condition, a confused-deputy mix-up could let another account use the role.
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
       Effect    = "Allow"
       Principal = { Service = "ec2.amazonaws.com" }
       Action    = "sts:AssumeRole"
+      Condition = {
+        StringEquals = { "aws:SourceAccount" = data.aws_caller_identity.current.account_id }
+      }
+    }]
+  })
+}
+
+# Logs for the CloudWatch agent (P1.9). Limited to one prefix; the group itself is
+# created in P1.9, so nothing here can create or delete a group.
+resource "aws_iam_role_policy" "instance_write_logs" {
+  name = "write-own-log-groups-only"
+  role = aws_iam_role.instance.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid    = "WriteLogs"
+      Effect = "Allow"
+      Action = [
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+        "logs:DescribeLogStreams",
+      ]
+      Resource = [
+        "arn:aws:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:/lookalike-hunter/*",
+        "arn:aws:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:/lookalike-hunter/*:log-stream:*",
+      ]
     }]
   })
 }
