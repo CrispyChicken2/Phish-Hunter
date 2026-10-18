@@ -12,6 +12,7 @@ import pytest
 from lookalike_hunter.alert.sinks import FileSink
 from lookalike_hunter.capture.handoff import PNG_SIGNATURE, CaptureJob, ResultWriter
 from lookalike_hunter.capture.models import CaptureResult, CaptureStatus
+from lookalike_hunter.capture.runner import CaptureExecutionError
 from lookalike_hunter.capture.signals import PageSignals
 from lookalike_hunter.classify.base import StubClassifier
 from lookalike_hunter.config import AlertConfig, CaptureConfig, ClassifyConfig, CTConfig, Settings
@@ -152,6 +153,25 @@ async def test_a_failing_capture_stage_is_counted_and_the_rest_still_runs(
 
     assert stats.failed_stages == 1  # the capture stage, reported
     assert stats.captured == 0 and stats.notified == 0  # later stages ran, found nothing
+
+
+async def test_a_container_that_exits_early_is_counted_as_a_failed_stage(
+    settings: Settings,
+) -> None:
+    # Regression: the capture container failed on every cycle, yet the cycle reported
+    # failed_stages: 0, because the runner swallowed the error. Such a failure must count.
+    store, scorer = parts(settings)
+    await run_pipeline(StreamThenWait(end=True), scorer, store, 60, 1)
+    assert settings.alert.file_path is not None
+    sinks = [FileSink(settings.alert.file_path)]
+
+    async def container_exits_early(job: CaptureJob, root: Path) -> None:
+        raise CaptureExecutionError("capture container exited with status 1")
+
+    stats = await run_cycle(settings, store, container_exits_early, StubClassifier(), None, sinks)
+
+    assert stats.failed_stages == 1
+    assert stats.notified == 0  # the later stages still ran
 
 
 async def test_a_stage_that_raises_does_not_end_the_watch(settings: Settings) -> None:
