@@ -149,6 +149,14 @@ class ArchiveConfig(BaseModel):
     older_than_hours: float = 6.0
 
 
+class BackupConfig(BaseModel):
+    """Daily snapshot of the database and dataset (`lookalike-hunter backup`), P1.7."""
+
+    # Set on the instance (LH_BACKUP__BUCKET), not committed here.
+    bucket: str | None = None
+    prefix: str = "backups"
+
+
 class WatchConfig(BaseModel):
     """The unattended loop (`lookalike-hunter watch`)."""
 
@@ -183,6 +191,7 @@ class Settings(BaseSettings):
     alert: AlertConfig = Field(default_factory=AlertConfig)
     watch: WatchConfig = Field(default_factory=WatchConfig)
     archive: ArchiveConfig = Field(default_factory=ArchiveConfig)
+    backup: BackupConfig = Field(default_factory=BackupConfig)
     brands: list[BrandConfig] = Field(default_factory=list)
 
     @classmethod

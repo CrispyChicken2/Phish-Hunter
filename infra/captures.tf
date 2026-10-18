@@ -65,6 +65,20 @@ resource "aws_s3_bucket_lifecycle_configuration" "captures" {
     }
   }
 
+  # Daily database and dataset snapshots (P1.7) expire on their own schedule.
+  rule {
+    id     = "expire-backups"
+    status = "Enabled"
+
+    filter {
+      prefix = "backups/"
+    }
+
+    expiration {
+      days = var.backup_retention_days
+    }
+  }
+
   # A failed multipart upload would otherwise keep its parts, and be billed, forever.
   rule {
     id     = "abort-failed-uploads"
@@ -110,19 +124,22 @@ resource "aws_s3_bucket_policy" "captures" {
   depends_on = [aws_s3_bucket_public_access_block.captures]
 }
 
-# The instance may add objects under the captures prefix. It may not read, list or
-# delete them: expiry is the lifecycle rule's job, and cleanup is local.
+# The instance may add objects under the captures and backups prefixes. It may not read,
+# list or delete them: expiry is the lifecycle rules' job, and cleanup is local.
 resource "aws_iam_role_policy" "instance_put_captures" {
-  name = "put-captures-only"
+  name = "put-captures-and-backups-only"
   role = aws_iam_role.instance.id
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Sid      = "PutCaptures"
-      Effect   = "Allow"
-      Action   = ["s3:PutObject"]
-      Resource = ["${aws_s3_bucket.captures.arn}/captures/*"]
+      Sid    = "PutCapturesAndBackups"
+      Effect = "Allow"
+      Action = ["s3:PutObject"]
+      Resource = [
+        "${aws_s3_bucket.captures.arn}/captures/*",
+        "${aws_s3_bucket.captures.arn}/backups/*",
+      ]
     }]
   })
 }
