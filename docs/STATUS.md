@@ -105,6 +105,19 @@ Status: `todo`, `doing`, `review` (PR open), `done`, `blocked`.
 | P3.2 | Vendored Chrome seccomp profile replacing `seccomp=unconfined`; sandbox kept enabled; a test proves the sandbox starts | todo | Strengthens the container. It does not weaken it |
 | P3.3 | Egress proxy against DNS rebinding: resolve once, check the address, connect to that address | todo | ADR first; ⏸ user approval before implementation |
 
+## Manual changes on the instance (not yet in Terraform)
+
+These were applied by hand over SSM, because a change in the setup script replaces
+the instance and deletes the database. Each one must be turned into code or into the
+runbook (P1.13) before the instance is ever rebuilt:
+
+| Change | Why | Where it lives |
+|---|---|---|
+| Docker Compose v5.6.0 plugin (`/usr/libexec/docker/cli-plugins/docker-compose`), checksum-verified | the capture step runs `docker compose` | not in the setup script |
+| Docker Buildx v0.38.0 plugin (`docker-buildx`), checksum-verified | `docker compose build` needs buildx 0.17+ | not in the setup script |
+| ACL on `/var/lib/lookalike-hunter/captures` for uid 1001 (the capture container's user) and uid 993 (the host's `lookalike`) | the container could not read job files | not in the setup script |
+| The watch process runs commit `6523718` (the failure counter fix) | the setup script still pins `6e3925c` | `repo_commit` in Terraform, to update at the next rebuild |
+
 ## Standing rules (from the mission)
 
 - Terraform: `plan` only. Never `apply` or `destroy`.
