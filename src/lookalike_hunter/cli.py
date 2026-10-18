@@ -8,9 +8,11 @@ import contextlib
 import os
 import re
 import signal
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from lookalike_hunter.alert.runner import build_sinks, run_alerts
+from lookalike_hunter.archive import archive_captures, s3_uploader
 from lookalike_hunter.capture.handoff import read_job
 from lookalike_hunter.capture.runner import run_captures, visit_in_docker, visit_in_process
 from lookalike_hunter.capture.visit import visit
@@ -383,6 +385,22 @@ def cmd_watch(settings: Settings, args: argparse.Namespace) -> None:
         log.info("watch.done", cycles=cycles)
 
 
+def cmd_archive(settings: Settings, args: argparse.Namespace) -> None:
+    """Upload captures older than the delay to S3, then delete their local copies."""
+    bucket = settings.archive.bucket
+    if not bucket:
+        raise SystemExit("archive.bucket is not set (LH_ARCHIVE__BUCKET)")
+    hours = args.older_than_hours or settings.archive.older_than_hours
+    stats = archive_captures(
+        settings.capture.output_dir,
+        settings.archive.prefix,
+        timedelta(hours=hours),
+        s3_uploader(bucket),
+        datetime.now(UTC),
+    )
+    log.info("archive.done", archived=stats.archived, failed=stats.failed)
+
+
 def cmd_verdicts(settings: Settings, args: argparse.Namespace) -> None:
     """Print the latest verdicts with the screenshot that backs each one."""
     with connect_with_retry(settings.db_path, read_only=True) as con:
@@ -528,6 +546,14 @@ def main(argv: list[str] | None = None) -> None:
         help="Visit hostile sites from this machine instead of the capture container",
     )
     watch_cmd.set_defaults(func=cmd_watch)
+
+    archive_cmd = sub.add_parser(
+        "archive", help="Move captures older than the delay to object storage, then free them"
+    )
+    archive_cmd.add_argument(
+        "--older-than-hours", type=float, default=None, help="archive.older_than_hours"
+    )
+    archive_cmd.set_defaults(func=cmd_archive)
 
     verdicts = sub.add_parser("verdicts", help="List recent verdicts with their evidence")
     verdicts.add_argument("--limit", type=int, default=20)

@@ -1,0 +1,15 @@
+[Unit]
+Description=Archive captures older than the delay to S3, then free the local copies
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# One pass, then exit. The bucket name is not in this file: it comes from a drop-in
+# (/etc/systemd/system/lookalike-archive.service.d/bucket.conf) written on the instance.
+Type=oneshot
+User=lookalike
+Group=lookalike
+WorkingDirectory=/opt/lookalike-hunter
+Environment=LH_PROFILE=aws
+Environment=AWS_REGION=eu-north-1
+ExecStart=/opt/lookalike-hunter/.venv/bin/lookalike-hunter archive

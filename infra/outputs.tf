@@ -15,6 +15,11 @@ output "instance_id" {
   value       = aws_instance.main.id
 }
 
+output "captures_bucket_name" {
+  description = "Bucket that holds archived captures. Set it on the instance as LH_ARCHIVE__BUCKET."
+  value       = aws_s3_bucket.captures.bucket
+}
+
 output "instance_security_group_id" {
   description = "Security group with no inbound rules, for the instance."
   value       = aws_security_group.instance.id

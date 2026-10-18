@@ -139,6 +139,16 @@ class AlertConfig(BaseModel):
     max_per_run: int = 50
 
 
+class ArchiveConfig(BaseModel):
+    """Captures moved to object storage (`lookalike-hunter archive`), P1.6."""
+
+    # The bucket name is set on the instance (LH_ARCHIVE__BUCKET), not committed here.
+    bucket: str | None = None
+    prefix: str = "captures"
+    # Long enough for the classifier to read a capture before its local copy is deleted.
+    older_than_hours: float = 6.0
+
+
 class WatchConfig(BaseModel):
     """The unattended loop (`lookalike-hunter watch`)."""
 
@@ -172,6 +182,7 @@ class Settings(BaseSettings):
     classify: ClassifyConfig = Field(default_factory=ClassifyConfig)
     alert: AlertConfig = Field(default_factory=AlertConfig)
     watch: WatchConfig = Field(default_factory=WatchConfig)
+    archive: ArchiveConfig = Field(default_factory=ArchiveConfig)
     brands: list[BrandConfig] = Field(default_factory=list)
 
     @classmethod
