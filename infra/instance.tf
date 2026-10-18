@@ -87,6 +87,13 @@ resource "aws_instance" "main" {
     instance_metadata_tags      = "disabled"
   }
 
+  # "standard" caps the CPU at its baseline. "unlimited" (the T4g default) bills any
+  # surplus without a ceiling, which is outside the $20 budget. Slower under long load is
+  # the accepted trade-off; the load test in ADR 0002 measures it.
+  credit_specification {
+    cpu_credits = "standard"
+  }
+
   root_block_device {
     volume_type           = "gp3"
     volume_size           = var.root_volume_gb
