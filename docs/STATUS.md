@@ -82,7 +82,7 @@ Status: `todo`, `doing`, `review` (PR open), `done`, `blocked`.
 | P1.8 | IAM: least-privilege instance role (bucket prefixes, named SSM parameters, CloudWatch Logs, SSM core) | todo | No wildcard without a written reason |
 | P1.9 | Observability: JSON logs to CloudWatch Logs; alarms for no certificate in 10 min, repeated failed `watch` cycles, disk > 80% | todo | Needs a metric filter and the CloudWatch agent for disk |
 | P1.10 | Cost: `aws_budgets_budget` with e-mail alert (variable); `docs/costs.md` itemised with assumptions | todo | Figures checked by the user in the AWS pricing calculator |
-| P1.11 | CI: `terraform fmt -check`, `terraform validate`, checkov or tfsec; no AWS credentials in CI | todo | Pin the actions to SHAs |
+| P1.11 | CI: `terraform fmt -check`, `terraform validate`, checkov or tfsec; no AWS credentials in CI | done | `infra` job in `.github/workflows/ci.yml`, read-only permissions, actions pinned to SHAs, checkov 3.3.29 pinned. First CI run 2026-10-18: both jobs passed. Warnings to fix later: Node.js 20 actions (setup-uv, setup-terraform), and `ubuntu-latest` moves to Ubuntu 26 on 2026-10-19 |
 | P1.12 | `terraform plan` runs cleanly; plan output attached to the PR | review | Plan passed 2026-10-18 (11 to add). Applied by the owner with the admin login: 11 added, 0 changed, 0 destroyed. Instance running; checked read-only: t4g.small, IMDSv2 required with hop limit 1, encrypted 20 GB gp3. Instance IDs are in the Terraform state, not in git. ⏸ for the owner's review and the SSM connection test |
 | P1.13 | `docs/deploy-aws.md` runbook (prerequisites, secrets, apply, verify, dashboard tunnel, code update, destroy); README section and cloud diagram | todo | The user follows it without help |
 
