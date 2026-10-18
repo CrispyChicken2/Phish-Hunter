@@ -43,3 +43,23 @@ jobs:
       - run: uv run --frozen --no-build --no-sync ruff format --check .
       - run: uv run --frozen --no-build --no-sync mypy src tests
       - run: uv run --frozen --no-build --no-sync pytest -q
+
+  # Infrastructure (infra/). Nothing here needs AWS: validation runs without a backend
+  # and makes no API call, so the job holds no credential and cannot change the account.
+  infra:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: "1.16.6"
+      - name: Format
+        run: terraform -chdir=infra fmt -check -recursive
+      - name: Validate
+        run: |
+          terraform -chdir=infra init -backend=false -input=false
+          terraform -chdir=infra validate
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+      - name: Security scan
+        # Pinned version. Runs in the same way as locally (see the infra checks in STATUS.md).
+        run: uvx --from checkov==3.3.29 checkov -d infra --framework terraform --quiet --compact
