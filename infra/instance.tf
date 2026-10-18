@@ -48,6 +48,8 @@ resource "aws_iam_role" "instance" {
 # policy, which also lets the instance read every SSM parameter in the account (P1.8).
 # The control-channel APIs take no resource, so the resource is "*" by necessity.
 resource "aws_iam_role_policy" "instance_session" {
+  # checkov:skip=CKV_AWS_355: the session APIs do not support resource-level permissions.
+  # checkov:skip=CKV_AWS_290: these are the documented minimum for a session, not open write access.
   name = "session-manager-minimum"
   role = aws_iam_role.instance.id
 
