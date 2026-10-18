@@ -100,10 +100,10 @@ resource "aws_iam_role_policy" "instance_write_logs" {
   })
 }
 
-resource "aws_iam_role_policy_attachment" "instance_ssm" {
-  role       = aws_iam_role.instance.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-}
+# The AWS-managed AmazonSSMManagedInstanceCore policy was removed in P1.8: it lets the
+# instance read every SSM parameter in the account. Session Manager is now covered by
+# the minimal policy below (aws_iam_role_policy.instance_session), tested with a live
+# session before this removal.
 
 resource "aws_iam_instance_profile" "instance" {
   name = "lookalike-hunter-instance"
