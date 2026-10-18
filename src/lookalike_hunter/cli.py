@@ -13,6 +13,7 @@ from pathlib import Path
 
 from lookalike_hunter.alert.runner import build_sinks, run_alerts
 from lookalike_hunter.archive import archive_captures, s3_uploader
+from lookalike_hunter.backup import backup
 from lookalike_hunter.capture.handoff import read_job
 from lookalike_hunter.capture.runner import run_captures, visit_in_docker, visit_in_process
 from lookalike_hunter.capture.visit import visit
@@ -401,6 +402,20 @@ def cmd_archive(settings: Settings, args: argparse.Namespace) -> None:
     log.info("archive.done", archived=stats.archived, failed=stats.failed)
 
 
+def cmd_backup(settings: Settings, args: argparse.Namespace) -> None:
+    """Upload a consistent snapshot of the database and the labelled dataset to S3."""
+    bucket = settings.backup.bucket
+    if not bucket:
+        raise SystemExit("backup.bucket is not set (LH_BACKUP__BUCKET)")
+    backup(
+        settings.db_path,
+        settings.dataset_path,
+        settings.backup.prefix,
+        datetime.now(UTC),
+        s3_uploader(bucket),
+    )
+
+
 def cmd_verdicts(settings: Settings, args: argparse.Namespace) -> None:
     """Print the latest verdicts with the screenshot that backs each one."""
     with connect_with_retry(settings.db_path, read_only=True) as con:
@@ -554,6 +569,11 @@ def main(argv: list[str] | None = None) -> None:
         "--older-than-hours", type=float, default=None, help="archive.older_than_hours"
     )
     archive_cmd.set_defaults(func=cmd_archive)
+
+    backup_cmd = sub.add_parser(
+        "backup", help="Upload a consistent snapshot of the database and the dataset"
+    )
+    backup_cmd.set_defaults(func=cmd_backup)
 
     verdicts = sub.add_parser("verdicts", help="List recent verdicts with their evidence")
     verdicts.add_argument("--limit", type=int, default=20)

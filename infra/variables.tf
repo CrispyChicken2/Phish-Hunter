@@ -74,6 +74,12 @@ variable "webhook_parameter_name" {
   default     = "/lookalike-hunter/alert-webhook-url"
 }
 
+variable "backup_retention_days" {
+  description = "Days before a daily database backup expires in S3 (P1.7). About a month of history."
+  type        = number
+  default     = 30
+}
+
 variable "budget_limit_usd" {
   description = "Monthly cost ceiling in USD (ADR 0002, option A)."
   type        = number
