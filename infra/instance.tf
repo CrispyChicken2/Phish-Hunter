@@ -44,6 +44,36 @@ resource "aws_iam_role" "instance" {
   })
 }
 
+# Session Manager only: the minimum AWS documents for a session, instead of the managed
+# policy, which also lets the instance read every SSM parameter in the account (P1.8).
+# The control-channel APIs take no resource, so the resource is "*" by necessity.
+resource "aws_iam_role_policy" "instance_session" {
+  name = "session-manager-minimum"
+  role = aws_iam_role.instance.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid    = "SessionManager"
+      Effect = "Allow"
+      Action = [
+        "ssmmessages:CreateControlChannel",
+        "ssmmessages:CreateDataChannel",
+        "ssmmessages:OpenControlChannel",
+        "ssmmessages:OpenDataChannel",
+        "ssm:UpdateInstanceInformation",
+        "ec2messages:AcknowledgeMessage",
+        "ec2messages:DeleteMessage",
+        "ec2messages:FailMessage",
+        "ec2messages:GetEndpoint",
+        "ec2messages:GetMessages",
+        "ec2messages:SendReply",
+      ]
+      Resource = "*"
+    }]
+  })
+}
+
 # Logs for the CloudWatch agent (P1.9). Limited to one prefix; the group itself is
 # created in P1.9, so nothing here can create or delete a group.
 resource "aws_iam_role_policy" "instance_write_logs" {
