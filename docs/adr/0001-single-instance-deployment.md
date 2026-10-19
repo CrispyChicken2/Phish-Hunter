@@ -1,6 +1,8 @@
 # ADR 0001: Single-instance deployment on EC2
 
-- **Status:** Proposed. The budget is now $15/month, which rules out the instance sizes below. See ADR 0002 for the cost ceiling and the options that fit it.
+- **Status:** Proposed, amended by ADR 0002. The budget is now $20/month, which the
+  deployment in `infra/` follows (ADR 0002, option A). The owner accepts or rejects this
+  ADR; the code does not decide it.
 - **Date:** 2026-10-17
 - **Decided by:** project owner
 

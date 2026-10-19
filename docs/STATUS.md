@@ -71,7 +71,7 @@ Status: `todo`, `doing`, `review` (PR open), `done`, `blocked`.
 
 | ID | Ticket | Status | Notes |
 |---|---|---|---|
-| P1.0 | ADR 0001: single-instance deployment (why, cost, limits, scale path) | done | `docs/adr/0001-single-instance-deployment.md`, Proposed. Amended by ADR 0002 (cost ceiling). ⏸ waiting for the ADR 0002 decision and approval |
+| P1.0 | ADR 0001: single-instance deployment (why, cost, limits, scale path) | done | `docs/adr/0001-single-instance-deployment.md`, still Proposed, amended by ADR 0002 (option A, budget $20). ADR 0002 is accepted (2026-10-17). ⏸ The owner accepts or rejects ADR 0001 |
 | P1.1 | Terraform skeleton: provider and version pins, variables, tags, no credentials in code; `make tf-plan` | done | Done: `infra/`, `make tf-fmt`, `make tf-validate`, `make tf-plan`. Local `validate` blocked by an x509 error (antivirus, likely), so it runs in CI. Local state, as decided |
 | P1.2 | Network: small VPC, one public subnet, no ingress rule, no NAT Gateway | done | Done in `infra/network.tf`. Checkov: 9 passed, 0 failed, 4 skipped with reasons in the code (public IP, open egress, SG not yet attached, no flow logs). `validate`/`plan` need CI or your login |
 | P1.3 | EC2 instance: type justified in ADR; IMDSv2 required, hop limit 1; encrypted EBS volume for DuckDB; no SSH key | done | Done in `infra/instance.tf`: t4g.small, arm64 Amazon Linux 2023, encrypted 20 GB gp3, IMDSv2 hop 1, SSM-only role. Checkov: 22 passed, 0 failed. `plan` blocked locally: the Terraform plugin connection fails with x509 (antivirus HTTPS scanning, same cause as the SSL error). Read-only login works (`PhishHunter-plan`, ViewOnlyAccess) |
