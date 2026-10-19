@@ -11,4 +11,6 @@ Group=lookalike
 WorkingDirectory=/opt/lookalike-hunter
 Environment=LH_PROFILE=aws
 Environment=AWS_REGION=eu-north-1
+# JSON log lines go to a file the CloudWatch agent reads (P1.9).
+StandardError=append:/var/log/lookalike-hunter/backup.log
 ExecStart=/opt/lookalike-hunter/.venv/bin/lookalike-hunter backup

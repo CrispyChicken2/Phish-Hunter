@@ -1,0 +1,13 @@
+# Copied to /etc/logrotate.d/lookalike-hunter (P1.9). Daily, seven days kept on the instance.
+# copytruncate, because the services keep the file open: the CloudWatch agent handles a
+# truncated file. Lines written in the instant between the copy and the truncation can be
+# lost, a small price for not restarting the services.
+/var/log/lookalike-hunter/*.log {
+    daily
+    rotate 7
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+}
