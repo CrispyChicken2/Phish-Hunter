@@ -84,7 +84,7 @@ These are options for the owner to decide. None has been applied.
   0.40 a month. The disk is the most useful of the three, so this is not recommended.
 - **Shorter log retention or fewer log lines.** Logs are small today. Measure them after a
   month before deciding.
-- **Raise the budget to USD 25.** This is a decision, and ADR 0002 would need updating.
+- **Raise the budget to USD 25.** Not chosen. The owner keeps the limit at USD 20 (decided 2026-10-19), so the estimate must stay under it, or the owner must decide again.
 
 The alerts are set at 85% of the limit, which is USD 17. A total of about USD 20 would
 send that alert every month, so the owner should decide the limit before relying on it.
