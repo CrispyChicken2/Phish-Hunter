@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from lookalike_hunter import cli
 from lookalike_hunter.cli import refuse_feed_output_in_datasets
 
 
@@ -30,4 +31,11 @@ def test_the_labelled_feed_folder_is_refused_for_candidates(repo: Path) -> None:
 
 
 def test_the_git_ignored_data_folder_is_allowed(repo: Path) -> None:
-    refuse_feed_output_in_datasets(Path("data/feed-candidates.jsonl"))
+    refuse_feed_output_in_datasets(Path("data/feed-entries.jsonl"))
+
+
+def test_an_absolute_path_into_this_checkout_is_refused_from_anywhere(repo: Path) -> None:
+    # The working directory is a temporary folder; the target is the real tracked file.
+    checkout_dataset = Path(cli.__file__).resolve().parents[2] / "datasets" / "eval.jsonl"
+    with pytest.raises(SystemExit, match="refusing"):
+        refuse_feed_output_in_datasets(checkout_dataset)

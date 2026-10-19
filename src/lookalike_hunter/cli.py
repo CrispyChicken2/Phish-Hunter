@@ -232,12 +232,17 @@ def refuse_feed_output_in_datasets(out: Path) -> None:
     data/, which git ignores. Labelled feed sites go to datasets/feed/, but only after a
     human has labelled them, never as raw candidates.
     """
-    tracked = Path("datasets").resolve()
+    # Both the folder next to the working directory and the one next to this checkout,
+    # so an absolute path into the repository is refused from any directory.
+    tracked_folders = {
+        Path("datasets").resolve(),
+        Path(__file__).resolve().parents[2] / "datasets",
+    }
     target = out.resolve()
-    if target == tracked or tracked in target.parents:
+    if any(target == folder or folder in target.parents for folder in tracked_folders):
         raise SystemExit(
             f"refusing to write feed-derived candidates to {out}: datasets/ is tracked by git. "
-            "Use data/feed-candidates.jsonl (see docs/feed-data.md)."
+            "Use data/feed-entries.jsonl (see docs/feed-data.md)."
         )
 
 
