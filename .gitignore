@@ -7,6 +7,8 @@ __pycache__/
 dist/
 data/*
 !data/.gitkeep
+# Feed-derived sites: the feed's terms do not allow redistribution (docs/feed-data.md).
+datasets/feed/
 .env
 *.duckdb
 *.duckdb.wal

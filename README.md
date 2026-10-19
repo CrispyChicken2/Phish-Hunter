@@ -251,8 +251,11 @@ any word ending in `l` followed by `cloud` read as `icloud`. Unambiguous confusa
 ## Measured results
 
 Evaluated on 78 labelled sites (64 judgeable; 14 excluded as unknown, being
-Cloudflare challenges or empty frames). Dataset and labels are in
-`datasets/eval.jsonl`; regenerate with `lookalike-hunter evaluate`.
+Cloudflare challenges or empty frames). Labels are in `datasets/eval.jsonl`, and the
+sites from the OpenPhish feed are kept out of this repository, as the feed's terms
+require (see [`docs/feed-data.md`](docs/feed-data.md)). Without that local file,
+`lookalike-hunter evaluate` runs on 51 sites and gives different figures; with it, the
+figures above are reproduced.
 
 | | Scoring only | Scoring + VLM |
 |---|---|---|

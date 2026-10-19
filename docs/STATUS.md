@@ -90,7 +90,7 @@ Status: `todo`, `doing`, `review` (PR open), `done`, `blocked`.
 
 | ID | Ticket | Status | Notes |
 |---|---|---|---|
-| P2.1 | Fast capture of phishing feed entries: timer, brand selection without the Scorer, existing dataset capture path; feed terms and refresh rate documented | todo | Terms of the OpenPhish feed must be read and quoted in the doc, not assumed |
+| P2.1 | Fast capture of phishing feed entries: timer, brand selection without the Scorer, existing dataset capture path; feed terms and refresh rate documented | todo | Terms read and quoted in `docs/feed-data.md` (2026-10-19). Decided 2026-10-19: feed-derived data stays out of git (`datasets/feed/`, ignored), refresh every 6 hours (the feed updates every 12 h). Not built yet. ⏸ Owner decides on the 27 lines already in git history and on the S3 captures of feed sites |
 | P2.2 | Vantage-point concept in `CONTEXT.md`; record the vantage point with each capture | todo | Possible minimal schema change, explained in the PR |
 | P2.3 | Cloaking comparison command: two capture sets, reports unreachable on one side, different content, different verdict | todo | ⏸ after P2.1 to P2.3 |
 | P2.4 | 95% bootstrap confidence intervals on accuracy and macro F1 in `evaluate` | review | `eval/stats.py`: percentile bootstrap, 10,000 resamples, fixed seed. Shown in each arm's report. Macro F1 leaves out a class missing from a resample (documented). Tests in `tests/test_stats.py` |

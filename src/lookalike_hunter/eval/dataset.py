@@ -134,3 +134,28 @@ def load_dataset(path: Path) -> list[LabelledSite]:
     if not sites:
         raise DatasetError(f"{path}: dataset is empty")
     return sites
+
+
+def load_all_datasets(main: Path, feed_dir: Path | None = None) -> list[LabelledSite]:
+    """The tracked dataset plus every local feed file, with no site counted twice.
+
+    Feed files sit in a ``feed`` folder next to the dataset (``datasets/feed/``), which
+    git ignores: the feed's terms do not allow redistribution, so the tracked dataset
+    holds only sites from our own alerts and calibration. See docs/feed-data.md.
+    A missing folder is not an error: the evaluation then runs on the tracked sites
+    alone, and the report says so through its site count.
+    """
+    if feed_dir is None:
+        feed_dir = main.parent / "feed"
+    sites = load_dataset(main)
+    seen = {site.fqdn: str(main) for site in sites}
+    if feed_dir.is_dir():
+        for path in sorted(feed_dir.glob("*.jsonl")):
+            for site in load_dataset(path):
+                if site.fqdn in seen:
+                    raise DatasetError(
+                        f"{path}: {site.fqdn} is also in {seen[site.fqdn]}; keep each site once"
+                    )
+                seen[site.fqdn] = str(path)
+                sites.append(site)
+    return sites

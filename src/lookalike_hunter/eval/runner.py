@@ -21,7 +21,7 @@ from lookalike_hunter.eval.arms import (
     scoring_only_arm,
     scoring_plus_vlm_arm,
 )
-from lookalike_hunter.eval.dataset import load_dataset
+from lookalike_hunter.eval.dataset import load_all_datasets
 from lookalike_hunter.eval.report import ArmResult, EvaluationReport
 from lookalike_hunter.ingest.store import connect_with_retry
 from lookalike_hunter.logging import get_logger
@@ -134,7 +134,7 @@ def run_evaluation(
     if unknown:
         raise ValueError(f"unknown evaluation arm: {unknown[0]}")
 
-    all_sites = load_dataset(dataset_path)
+    all_sites = load_all_datasets(dataset_path)
     # A site labelled unknown carries no ground truth: a Cloudflare challenge or an
     # empty frame tells us nothing about either arm. Counting it as a class of its
     # own would drag every macro average toward zero for no reason, so it is
