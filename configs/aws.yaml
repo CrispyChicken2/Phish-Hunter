@@ -12,6 +12,11 @@ capture:
 alert:
   file_path: /var/lib/lookalike-hunter/alerts.jsonl
 
+# P2.1: the feed timer (deploy/lookalike-feed.timer) appends candidates here, and the
+# watch loop captures the fresh ones. The file is outside git (docs/feed-data.md).
+watch:
+  feed_entries_path: /var/lib/lookalike-hunter/feed-entries.jsonl
+
 # The local default is the offline stub. The instance runs the real model, as the
 # README describes for the Mistral free tier (no paid tier without approval).
 classify:

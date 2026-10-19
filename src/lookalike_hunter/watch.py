@@ -18,6 +18,7 @@ from dataclasses import dataclass
 
 from lookalike_hunter.alert.runner import run_alerts
 from lookalike_hunter.alert.sinks import AlertSink
+from lookalike_hunter.capture.feed_entries import fresh_feed_targets
 from lookalike_hunter.capture.runner import Executor, run_captures
 from lookalike_hunter.classify.base import Classifier
 from lookalike_hunter.classify.runner import run_classifications
@@ -63,6 +64,26 @@ async def run_cycle(
     except Exception:
         stats.failed_stages += 1
         log.exception("watch.capture_failed")
+    if settings.watch.feed_entries_path is not None:
+        # Feed candidates (P2.1): captured here, after the alerts, so only one browser
+        # ever runs. Their verdicts are measured, never announced (see pending_alerts).
+        try:
+            targets = fresh_feed_targets(
+                store,
+                settings.watch.feed_entries_path,
+                settings.watch.feed_entries_per_cycle,
+                settings.watch.feed_entries_max_age_days,
+            )
+            if targets:
+                fresh = await run_captures(
+                    store, settings.capture, targets=targets, executor=executor
+                )
+                stats.captured += fresh.attempted
+                if fresh.execution_failed:
+                    stats.failed_stages += 1
+        except Exception:
+            stats.failed_stages += 1
+            log.exception("watch.feed_capture_failed")
     try:
         classified = await run_classifications(
             store,

@@ -10,12 +10,21 @@ from typing import Any
 import pytest
 
 from lookalike_hunter.alert.sinks import FileSink
+from lookalike_hunter.capture.feed_entries import NEVER_RECAPTURE_H
 from lookalike_hunter.capture.handoff import PNG_SIGNATURE, CaptureJob, ResultWriter
 from lookalike_hunter.capture.models import CaptureResult, CaptureStatus
 from lookalike_hunter.capture.runner import CaptureExecutionError
 from lookalike_hunter.capture.signals import PageSignals
 from lookalike_hunter.classify.base import StubClassifier
-from lookalike_hunter.config import AlertConfig, CaptureConfig, ClassifyConfig, CTConfig, Settings
+from lookalike_hunter.config import (
+    AlertConfig,
+    CaptureConfig,
+    ClassifyConfig,
+    CTConfig,
+    Settings,
+    WatchConfig,
+)
+from lookalike_hunter.eval.build import Candidate
 from lookalike_hunter.ingest.pipeline import run_pipeline
 from lookalike_hunter.ingest.store import MatchStore
 from lookalike_hunter.scoring.scorer import Scorer
@@ -234,3 +243,27 @@ async def test_a_stream_that_ends_stops_the_watch_loudly(settings: Settings) -> 
             interval_s=0.05,
             cycles=5,
         )
+
+
+async def test_a_feed_candidate_is_captured_but_never_announced(
+    settings: Settings, tmp_path: Path
+) -> None:
+    # P2.1: the watch loop captures fresh feed candidates itself, one browser at a time,
+    # and their verdicts are measured but never sent to the alert sinks.
+    candidates = tmp_path / "feed-entries.jsonl"
+    today = datetime.now(UTC).date()
+    candidates.write_text(
+        Candidate(fqdn="feed-phish.example", source="openphish", brand="paypal").to_json_line(today)
+        + "\n",
+        encoding="utf-8",
+    )
+    settings = settings.model_copy(update={"watch": WatchConfig(feed_entries_path=candidates)})
+    store, _ = parts(settings)
+    assert settings.alert.file_path is not None
+    sinks = [FileSink(settings.alert.file_path)]
+
+    stats = await run_cycle(settings, store, phishing_kit_everywhere, StubClassifier(), None, sinks)
+
+    assert stats.captured == 1
+    assert store.uncaptured(["feed-phish.example"], NEVER_RECAPTURE_H) == []
+    assert "feed-phish.example" not in {n["fqdn"] for n in notifications(settings)}

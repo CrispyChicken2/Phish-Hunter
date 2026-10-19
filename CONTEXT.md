@@ -29,3 +29,6 @@ A Match whose score is above the alert threshold. Only Alerts are sent to captur
 
 **Verdict**
 The classification of an Alert's live site: `phishing`, `parked`, `legitimate` or `unreachable`.
+
+**Feed entry**
+A URL listed by a public phishing feed (OpenPhish) that mentions a Brand, found by plain substring search, never by scoring. Feed entries are captured and given a Verdict so detection can be measured on known phishing, but they are not Alerts: they are never announced, and the feed's terms keep them out of the repository (`docs/feed-data.md`).

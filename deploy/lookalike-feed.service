@@ -1,19 +1,19 @@
 [Unit]
-Description=Fetch the phishing feed, then capture its brand matches (P2.1)
-After=network-online.target docker.service
+Description=Fetch the phishing feed and append new brand candidates (P2.1)
+After=network-online.target
 Wants=network-online.target
 
 [Service]
-# Two steps, one after the other. The feed terms do not allow redistribution, so the
-# candidates stay in /var/lib/lookalike-hunter, which is not in git (docs/feed-data.md).
-# The command refuses any output path under datasets/.
+# Fetch only. The watch service captures the candidates itself, a few per cycle, so
+# only one browser and one database writer ever run (watch.feed_entries_path in
+# configs/aws.yaml). The feed terms do not allow redistribution, so the candidates
+# stay in /var/lib/lookalike-hunter, outside git; the command refuses any path under
+# datasets/ (docs/feed-data.md).
 Type=oneshot
 User=lookalike
 Group=lookalike
 WorkingDirectory=/opt/lookalike-hunter
 Environment=LH_PROFILE=aws
 Environment=AWS_REGION=eu-north-1
-Environment=LH_CAPTURES_DIR=/var/lib/lookalike-hunter/captures
-ExecStart=/opt/lookalike-hunter/.venv/bin/lookalike-hunter dataset --fetch-feed --out /var/lib/lookalike-hunter/feed-candidates.jsonl
-ExecStart=/opt/lookalike-hunter/.venv/bin/lookalike-hunter capture --from-dataset /var/lib/lookalike-hunter/feed-candidates.jsonl --limit 20
+ExecStart=/opt/lookalike-hunter/.venv/bin/lookalike-hunter dataset --fetch-feed --out /var/lib/lookalike-hunter/feed-entries.jsonl
 StandardError=append:/var/log/lookalike-hunter/feed.log
