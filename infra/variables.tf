@@ -93,6 +93,12 @@ variable "alarm_email" {
   sensitive   = true
 }
 
+variable "budget_alert_email" {
+  description = "E-mail address for the monthly budget alerts (P1.10). Required: it is the existing subscriber. Owner's address: never commit it, use TF_VAR_budget_alert_email."
+  type        = string
+  sensitive   = true
+}
+
 variable "budget_limit_usd" {
   description = "Monthly cost ceiling in USD (ADR 0002, option A)."
   type        = number
