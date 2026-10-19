@@ -17,7 +17,7 @@ resource "aws_budgets_budget" "monthly" {
 
   # As in the console: the primary billing view, unblended cost, and credits and refunds
   # left out of the spend. Without these, the budget would count refunds and credits.
-  billing_view_arn = "arn:aws:billing::141538081016:billingview/primary"
+  billing_view_arn = "arn:aws:billing::${data.aws_caller_identity.current.account_id}:billingview/primary"
   metrics          = ["UnblendedCost"]
 
   filter_expression {
