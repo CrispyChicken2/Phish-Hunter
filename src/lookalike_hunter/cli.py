@@ -9,6 +9,7 @@ import os
 import re
 import signal
 from datetime import UTC, datetime, timedelta
+from itertools import combinations
 from pathlib import Path
 
 from lookalike_hunter.alert.runner import build_sinks, run_alerts
@@ -33,6 +34,7 @@ from lookalike_hunter.eval.dataset import iter_dataset
 from lookalike_hunter.eval.feeds import OPENPHISH_FEED_URL
 from lookalike_hunter.eval.report import write_report
 from lookalike_hunter.eval.runner import run_evaluation
+from lookalike_hunter.eval.stats import discordant_counts, mcnemar_exact
 from lookalike_hunter.ingest.pipeline import run_pipeline
 from lookalike_hunter.ingest.sources import CertSource, CertstreamSource, ReplaySource
 from lookalike_hunter.ingest.store import MatchStore, PendingCapture, connect_with_retry
@@ -259,6 +261,8 @@ def cmd_compare_models(settings: Settings, args: argparse.Namespace) -> None:
     scorer = Scorer(settings.brands, settings.scoring, index)
 
     rows = []
+    # Per model: site -> was the answer right? Kept per site so models can be paired.
+    answers: dict[str, dict[str, bool]] = {}
     for model in args.models:
         report = run_evaluation(
             args.dataset,
@@ -270,6 +274,7 @@ def cmd_compare_models(settings: Settings, args: argparse.Namespace) -> None:
             model=model,
         )
         arm = report.arms[ARM_SCORING_PLUS_VLM]
+        answers[model] = {p.fqdn: p.expected == p.predicted for p in arm.predictions}
         spend = arm.cost
         rows.append(
             (
@@ -290,6 +295,18 @@ def cmd_compare_models(settings: Settings, args: argparse.Namespace) -> None:
         print(
             f"{safe_text(model, 24):24} {judged:>6} {accuracy:>8.2%} {f1:>8.4f} "
             f"{ms:>8.0f} {tokens:>8} {cost:>8.4f}"
+        )
+
+    # Paired test for every pair of models, on the sites both of them judged. The
+    # p-value says whether the disagreements could be chance; it says nothing about cost.
+    print("\nPaired comparison (exact McNemar, two-sided, sites judged by both models):")
+    for (first, first_answers), (second, second_answers) in combinations(answers.items(), 2):
+        only_first, only_second, shared = discordant_counts(first_answers, second_answers)
+        p_value = mcnemar_exact(only_first, only_second)
+        print(
+            f"  {safe_text(first, 24)} vs {safe_text(second, 24)}: "
+            f"{only_first} / {only_second} disagreements, {shared} shared sites, "
+            f"p = {p_value:.4f}"
         )
 
 

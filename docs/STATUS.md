@@ -93,8 +93,8 @@ Status: `todo`, `doing`, `review` (PR open), `done`, `blocked`.
 | P2.1 | Fast capture of phishing feed entries: timer, brand selection without the Scorer, existing dataset capture path; feed terms and refresh rate documented | todo | Terms of the OpenPhish feed must be read and quoted in the doc, not assumed |
 | P2.2 | Vantage-point concept in `CONTEXT.md`; record the vantage point with each capture | todo | Possible minimal schema change, explained in the PR |
 | P2.3 | Cloaking comparison command: two capture sets, reports unreachable on one side, different content, different verdict | todo | ⏸ after P2.1 to P2.3 |
-| P2.4 | 95% bootstrap confidence intervals on accuracy and macro F1 in `evaluate` | todo | Seeded, so the report is reproducible |
-| P2.5 | Exact McNemar test in `compare-models`, replacing the coin-flip argument | todo | Exact binomial test, not a chi-square approximation |
+| P2.4 | 95% bootstrap confidence intervals on accuracy and macro F1 in `evaluate` | review | `eval/stats.py`: percentile bootstrap, 10,000 resamples, fixed seed. Shown in each arm's report. Macro F1 leaves out a class missing from a resample (documented). Tests in `tests/test_stats.py` |
+| P2.5 | Exact McNemar test in `compare-models`, replacing the coin-flip argument | review | `eval/stats.py`: exact two-sided binomial test on the disagreements, printed for every pair of models. The README example gives p = 0.6875 (computed, not hand-typed). The README coin-flip sentence is replaced. Not run on a live model comparison yet (needs Mistral calls) |
 | P2.6 | Updated results: rerun `evaluate` and `compare-models`, update "Measured results" and correct contradicted claims | blocked | Waits for at least 30 phishing sites captured and labelled, validated by the user in the dashboard |
 
 ### Phase 3: security limitations (if time allows, in this order)

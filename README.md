@@ -310,9 +310,9 @@ Same sites, same captures, same labels; only the model changes.
 | `ministral-14b-latest` | 39 | 56.4% | 0.324 | 2418 | 11375 |
 
 **The accuracy differences here are not significant.** 8b and 14b disagree on 6
-of 39 sites, 4 in 8b's favour and 2 in 14b's: a net difference of 2 sites, which
-a coin flip reproduces most of the time. Read as "no measurable accuracy
-difference", not as "8b is better".
+of 39 sites, 4 in 8b's favour and 2 in 14b's. An exact McNemar test on those 6
+disagreements gives p = 0.69 (two-sided), so the difference is not statistically
+significant. Read as "no measurable accuracy difference", not as "8b is better".
 
 The latency difference is real and consistent (1386 vs 2418 ms/site), as is the
 rate limit (188 vs 30 requests/minute). The default is `ministral-8b-latest` on

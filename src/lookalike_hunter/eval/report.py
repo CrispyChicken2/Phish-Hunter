@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from lookalike_hunter.eval.metrics import Metrics
+from lookalike_hunter.eval.stats import Interval, bootstrap_intervals
 from lookalike_hunter.eval.sweep import ThresholdSweep
 
 if TYPE_CHECKING:  # avoids a cycle: arms imports report
@@ -66,6 +67,11 @@ class ArmResult:
         return [p for p in self.mistakes if p.is_costly]
 
     @property
+    def intervals(self) -> dict[str, Interval]:
+        """95% bootstrap intervals for accuracy and macro F1 over the judged sites."""
+        return bootstrap_intervals([(p.expected, p.predicted) for p in self.predictions])
+
+    @property
     def contradictory_verdicts(self) -> list[Prediction]:
         return [p for p in self.predictions if p.verdict_brand and p.predicted != "phishing"]
 
@@ -100,9 +106,14 @@ class EvaluationReport:
             if arm.caveat:
                 lines += [f"> {arm.caveat}", ""]
             m = arm.metrics
+            ci = arm.intervals
             lines += [
                 f"Accuracy: **{m.accuracy:.2%}** ({m.correct}/{m.total}) · "
                 f"macro F1: **{m.macro_f1:.4f}**",
+                "",
+                f"95% bootstrap interval (10,000 resamples, fixed seed): accuracy "
+                f"{ci['accuracy'].low:.2%} to {ci['accuracy'].high:.2%}, macro F1 "
+                f"{ci['macro_f1'].low:.4f} to {ci['macro_f1'].high:.4f}.",
                 "",
                 f"Judged {arm.evaluated} site(s); {arm.excluded} excluded"
                 + (" (no usable capture)." if arm.excluded else "."),
