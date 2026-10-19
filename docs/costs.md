@@ -14,8 +14,11 @@ calls are read-only and were made with the admin profile. Each price is matched 
 
 **Cross-checked by the owner (2026-10-19):** the EC2 `t4g.small` Linux price and the EBS
 gp3 price were checked on the AWS public pricing pages for Stockholm. The AWS Pricing
-Calculator does not list either item, so those two cannot be checked there. The other
-lines still need the calculator check. The product description is shown next to each price, so the price
+Calculator does not list either item, so those two cannot be checked there.
+
+**Validated in the AWS Pricing Calculator (USD, 2026-10-19):** 3 custom metrics ($0.90),
+3 standard alarms ($0.30) and 10 GB of S3 Standard storage ($0.23). The owner validated the
+other lines of the document as well, without re-checking each one in the calculator. The product description is shown next to each price, so the price
 can be checked against the console. The owner should still confirm each one in the AWS
 pricing calculator before relying on it.
 
