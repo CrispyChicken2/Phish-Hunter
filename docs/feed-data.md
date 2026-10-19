@@ -49,10 +49,15 @@ site (`eval/dataset.py`, `load_all_datasets`).
 
 ## Known gap: git history
 
-Commits made before this change still contain 27 feed-derived lines in `datasets/eval.jsonl`.
-Removing them from the current file does not remove them from history. Rewriting the
-history would require a forced push to a public branch, so it is not done. The owner
-decides whether to do it.
+On 2026-10-19 the history was rewritten (with the owner's approval) to remove the 27
+feed-derived lines from every commit. The commit count is unchanged (144), but 98
+commits have new hashes; the instance and Terraform references are listed in
+`docs/STATUS.md`. The remote has no other branch.
+
+Copies that existed before the rewrite are outside the repository's control: other clones,
+any copy in a backup, and GitHub's cached pages until they expire. The backup bundle made
+for the rewrite, in the Windows temp folder, also contains the lines; delete it once the
+rewrite is verified.
 
 ## Effect on reproducing the results
 
@@ -64,5 +69,5 @@ README. Running it with the local `datasets/feed/` file gives the same numbers.
 
 1. Ask OpenPhish in writing for permission to publish feed-derived data (optional; this
    would allow restoring the lines to the repository).
-2. Decide whether to rewrite the git history to remove the 27 lines.
+2. Delete the backup bundle in the Windows temp folder (`lookalike-backup-before-rewrite.bundle`).
 3. Decide whether the S3 bucket may keep captures of feed sites (the bucket is private).

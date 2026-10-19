@@ -237,5 +237,8 @@ Do not use `terraform destroy` without the plan step.
 - Restoring a database backup: not tested.
 - Dashboard on the instance: not set up.
 - The backup bucket drop-in is not in the repository.
-- `repo_commit` in Terraform (`6e3925c`) is older than the commit the instance runs.
-  This is recorded in `docs/STATUS.md` and must be reconciled at the next rebuild.
+- `repo_commit` in Terraform (`6e3925c`) no longer exists on GitHub: the history was
+  rewritten on 2026-10-19 to remove feed-derived lines. Its replacement is `6423d72`.
+  The running instance still has the old objects locally and is not affected. A
+  rebuild needs `repo_commit` set to `6423d72` in the same planned change (section 8).
+  The instance's current commit is `fff65b6` in the new history.

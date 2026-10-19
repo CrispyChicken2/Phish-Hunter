@@ -38,6 +38,10 @@ variable "root_volume_gb" {
   default     = 20
 }
 
+# WARNING (2026-10-19): the commit below was rewritten by the history cleanup and no longer
+# exists on GitHub. Its replacement is 6423d72. Do not change this value on its own: it is part
+# of the startup script, so changing it replaces the instance and its database. Change it only
+# during a planned rebuild (docs/deploy-aws.md, section 8).
 variable "repo_commit" {
   description = "Exact repository commit the instance runs (pinned; updates are deliberate)."
   type        = string
