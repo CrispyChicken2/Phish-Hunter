@@ -157,7 +157,7 @@ runbook (P1.13) before the instance is ever rebuilt:
       `*.tfvars` rule in `.gitignore`).
 - [ ] **P1.10:** decide whether Terraform manages the existing AWS Budget (import) or
       creates a second one.
-- [x] **P1.5 (after P1.12):** (Mistral key checked: HTTP 200 on the instance. Webhook not yet tested.) enter `MISTRAL_API_KEY` and `LH_ALERT__WEBHOOK_URL` into
+- [x] **P1.5 (after P1.12):** (Mistral key checked: HTTP 200 on the instance. Webhook tested on the instance: HTTP 204 from Discord, 2026-10-19.) enter `MISTRAL_API_KEY` and `LH_ALERT__WEBHOOK_URL` into
       SSM Parameter Store as SecureString, by hand.
 - [ ] **P1.12:** run `terraform apply` yourself. The agent never applies.
 - [x] **P1.9:** `terraform apply` done 2026-10-19 (10 added). No e-mail subscription yet: add
