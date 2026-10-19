@@ -88,7 +88,13 @@ class EvaluationReport:
     arms: dict[str, ArmResult] = field(default_factory=dict)
 
     def to_json(self) -> str:
-        return json.dumps(asdict(self), indent=2, default=str, sort_keys=True)
+        payload = asdict(self)
+        # The intervals are computed, not stored, so asdict() does not see them.
+        for name, arm in self.arms.items():
+            payload["arms"][name]["intervals"] = {
+                metric: asdict(interval) for metric, interval in arm.intervals.items()
+            }
+        return json.dumps(payload, indent=2, default=str, sort_keys=True)
 
     def to_markdown(self) -> str:
         lines = [

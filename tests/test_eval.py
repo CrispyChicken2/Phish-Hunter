@@ -193,9 +193,12 @@ def test_report_is_written_in_both_formats(tmp_path: Path, scorer: Scorer) -> No
     payload = json.loads(json_path.read_text(encoding="utf-8"))
     assert payload["dataset_size"] == 8
     assert payload["arms"][ARM_SCORING_ONLY]["metrics"]["accuracy"] == 0.625
+    interval = payload["arms"][ARM_SCORING_ONLY]["intervals"]["accuracy"]
+    assert interval["low"] <= 0.625 <= interval["high"]
 
     markdown = markdown_path.read_text(encoding="utf-8")
     assert "# Evaluation report" in markdown
+    assert "95% bootstrap interval" in markdown
     assert "Confusion matrix" in markdown
     assert "cannot predict parked" in markdown  # the caveat travels with the numbers
     assert "paypal-login-fixture.com" in markdown  # mistakes are visible
