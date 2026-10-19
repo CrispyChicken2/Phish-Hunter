@@ -480,7 +480,12 @@ class MatchStore:
     def pending_alerts(
         self, labels: Sequence[str], min_confidence: float, limit: int
     ) -> list[PendingAlert]:
-        """Verdicts matching the policy that nobody has been told about yet."""
+        """Verdicts matching the policy that nobody has been told about yet.
+
+        Only sites our own scoring found (a row in matches) are announced. Sites
+        captured from a dataset or a phishing feed are already known phishing: they
+        are measured, not reported, and a feed's terms forbid passing them on.
+        """
         with connect_with_retry(self.db_path, read_only=True) as con:
             rows = con.execute(
                 """
@@ -490,6 +495,7 @@ class MatchStore:
                        v.classified_at
                 FROM verdicts v JOIN captures c USING (capture_id)
                 WHERE v.alerted_at IS NULL
+                  AND EXISTS (SELECT 1 FROM matches m WHERE m.fqdn = v.fqdn)
                   AND v.label IN (SELECT unnest(?))
                   AND v.confidence >= ?
                 ORDER BY v.confidence DESC, v.verdict_id DESC

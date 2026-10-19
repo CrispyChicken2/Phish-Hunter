@@ -17,7 +17,9 @@ from lookalike_hunter.alert.sinks import (
 )
 from lookalike_hunter.capture.models import CaptureResult, CaptureStatus
 from lookalike_hunter.classify.schema import Label, Verdict
+from lookalike_hunter.ingest.parse import Certificate
 from lookalike_hunter.ingest.store import MatchStore
+from lookalike_hunter.scoring.scorer import Match, MatchFeatures
 
 NOW = datetime(2026, 9, 28, 9, 0, tzinfo=UTC)
 
@@ -38,9 +40,19 @@ def notification(**overrides: object) -> Notification:
 
 
 def store_with_verdict(
-    tmp_path: Path, label: Label = Label.PHISHING, confidence: float = 0.93
+    tmp_path: Path,
+    label: Label = Label.PHISHING,
+    confidence: float = 0.93,
+    found_by_scoring: bool = True,
 ) -> MatchStore:
     store = MatchStore(tmp_path / "t.duckdb", 0.7)
+    if found_by_scoring:
+        # The site came through CT scoring, as a real alert does.
+        certificate = Certificate(
+            "ab" * 32, NOW, "Let's Encrypt", NOW, NOW, "log", ("appleid-security.com",)
+        )
+        match = Match("appleid-security.com", "appleid-security.com", "apple", 0.9, MatchFeatures())
+        store.write([(certificate, match)])
     store.save_capture(
         CaptureResult(
             fqdn="appleid-security.com",
@@ -195,6 +207,17 @@ def test_phishing_verdict_is_sent_once(tmp_path: Path) -> None:
     assert first.sent == 1
     assert second.considered == 0  # an alerting tool that repeats itself gets muted
     assert len((tmp_path / "alerts.jsonl").read_text(encoding="utf-8").splitlines()) == 1
+
+
+def test_a_site_our_scoring_never_found_is_not_announced(tmp_path: Path) -> None:
+    # A feed or dataset capture: known phishing, measured but never reported.
+    store = store_with_verdict(tmp_path, found_by_scoring=False)
+    sink = FileSink(tmp_path / "alerts.jsonl")
+
+    stats = run_alerts(store, [sink], min_confidence=0.6, limit=10)
+
+    assert stats.considered == 0
+    assert not (tmp_path / "alerts.jsonl").exists()
 
 
 def test_parked_verdicts_are_not_announced(tmp_path: Path) -> None:
