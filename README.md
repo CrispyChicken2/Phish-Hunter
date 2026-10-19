@@ -157,6 +157,39 @@ buffered matches before stopping.
 ingesting, which suits cron. `watch --no-ingest` keeps looping while `ingest`
 runs elsewhere.
 
+### Deploying on AWS
+
+The same system runs on one EC2 instance in `eu-north-1` (Stockholm), described in
+Terraform under `infra/`. The design choices are in
+[ADR 0001](docs/adr/0001-single-instance-deployment.md) and
+[ADR 0002](docs/adr/0002-cost-ceiling-15-usd.md). The instance has no inbound port:
+access is through SSM Session Manager only, and the secrets come from SSM Parameter
+Store. Captures and daily database backups go to a private S3 bucket.
+
+```mermaid
+flowchart LR
+    CT["Certificate Transparency stream"] --> EC2
+    subgraph AWS["AWS eu-north-1, one VPC, no inbound port"]
+        EC2["EC2 t4g.small<br/>watch, certstream, capture container"]
+        SSM["SSM Parameter Store<br/>API key, webhook URL"]
+        S3[("S3 private bucket<br/>captures, backups")]
+        CWL["CloudWatch Logs and alarms"]
+        SNS["SNS alarm topic"]
+    end
+    EC2 -- "reads two named secrets" --> SSM
+    EC2 -- "archive, daily backup" --> S3
+    EC2 -- "JSON logs, metrics" --> CWL
+    CWL --> SNS
+    EC2 -- "classification" --> Mistral[("Mistral API")]
+    EC2 -- "alerts" --> Discord[("Discord webhook")]
+    Owner["Owner"] -- "SSM Session Manager" --> EC2
+```
+
+- **Runbook:** [`docs/deploy-aws.md`](docs/deploy-aws.md) covers prerequisites, secrets,
+  apply, checks, updates and destroying everything. It lists its known gaps at the end.
+- **Cost:** about $20 a month, with the assumptions in [`docs/costs.md`](docs/costs.md).
+- **Not on AWS yet:** the dashboard. It still runs on the owner's PC.
+
 ## Visiting hostile sites safely
 
 The browser is the only component that runs attacker-controlled content, so it is
