@@ -69,9 +69,20 @@ value, restart the service that uses it.
 
 ```powershell
 $env:AWS_PROFILE = "PhishHunter-plan"
+$env:TF_VAR_budget_alert_email = "you@example.com"   # required: the budget's alert address
 terraform -chdir=infra init -input=false
-terraform -chdir=infra plan -input=false -no-color -out="$env:TEMP\lh.tfplan"
+terraform -chdir=infra plan -input=false -no-color -refresh=false -out="$env:TEMP\lh.tfplan"
 ```
+
+Two things to know about this plan:
+
+- `TF_VAR_budget_alert_email` is required, so a plan can never remove the budget's
+  existing alert address. Set it in every new PowerShell window. Never commit it.
+- `-refresh=false` is there because the read-only profile cannot read the budget, the
+  bucket policy, the role's inline policies and a few other settings. Without the
+  refresh, the plan compares the code with Terraform's state only, so it does not see
+  changes made by hand in the console. For a full check, run the same plan with the
+  admin profile and without `-refresh=false`. A plan only reads; it never changes AWS.
 
 The plan is saved outside the repository. Before applying, check that it:
 
@@ -165,7 +176,8 @@ unset W
 | Task | Command on the instance |
 |---|---|
 | service status | `systemctl status lookalike-watch` |
-| recent watch events | `journalctl -u lookalike-watch -n 50 --no-pager` (or `tail` the file in `/var/log/lookalike-hunter/watch.log`) |
+| recent watch events | `tail -n 50 /var/log/lookalike-hunter/watch.log` (the journal only holds systemd's own lines: the services log to files) |
+| recent feed fetches (P2.1) | `tail -n 20 /var/log/lookalike-hunter/feed.log` |
 | run the archive now | `systemctl start lookalike-archive.service` |
 | run a backup now | `systemctl start lookalike-backup.service` |
 | restart watch after a secret change | `systemctl restart lookalike-watch` |
@@ -181,12 +193,16 @@ Two ways, and only one is safe for the database:
   commit, sync the dependencies, and restart the services:
 
   ```
-  cd /opt/lookalike-hunter
-  git fetch origin
-  git checkout --detach <new commit>
+  runuser -u lookalike -- git -C /opt/lookalike-hunter fetch origin
+  runuser -u lookalike -- git -C /opt/lookalike-hunter checkout --detach <new commit>
   runuser -u lookalike -- env HOME=/var/lib/lookalike-hunter bash -c 'cd /opt/lookalike-hunter && uv sync --locked --no-dev'
   systemctl restart lookalike-watch
   ```
+
+  Git runs as `lookalike`, the owner of the checkout: run as root, git refuses a
+  repository owned by another user ("detected dubious ownership"). The fetch also
+  accepts the rewritten history of 2026-10-19, since a fetch overwrites the copy of
+  the remote branch.
 
   Record the commit you now run in `docs/STATUS.md` (the manual-changes table).
   Caveat: the new commit must be pushed to GitHub first, and the code must be reviewed

@@ -28,16 +28,25 @@ update frequency as 12 hours.
 |---|---|---|
 | Labelled sites from our own alerts and calibration | `datasets/eval.jsonl` | yes |
 | Labelled sites from the OpenPhish feed | `datasets/feed/` | **no** (ignored by `.gitignore`) |
-| Feed candidates fetched by the timer (P2.1) | `/var/lib/lookalike-hunter/feed-candidates.jsonl` on the instance | **no** (not in the repository) |
+| Feed candidates fetched by the timer (P2.1) | `/var/lib/lookalike-hunter/feed-entries.jsonl` on the instance | **no** (not in the repository) |
 | Captures of feed sites | the capture folder on the instance, then the private S3 bucket | **no** (the bucket is private) |
 
-**How the timer works (P2.1).** `deploy/lookalike-feed.timer` runs every 6 hours. It
-fetches the feed, keeps entries that mention a configured brand (a plain substring search,
-with no Scorer), and appends them to the candidates file. Then it captures up to 20
-candidates that have no screenshot yet. The candidates file is unlabelled, so the
-evaluation refuses to read it. A person must label a site before it can enter
-`datasets/feed/`. The command refuses any output path under `datasets/`, so the tracked
-folder cannot receive feed candidates by mistake.
+**How it works (P2.1).** `deploy/lookalike-feed.timer` runs every 6 hours. It fetches the
+feed, keeps entries that mention a configured brand (a plain substring search, with no
+Scorer), and appends the new ones to the candidates file. It captures nothing itself.
+
+The `watch` service captures the candidates, after the alerts of each cycle: at most 5
+per cycle, newest first, only those listed in the last day, and each site only once. One
+process therefore runs one browser and writes to the database; the instance has 1.8 GB of
+memory and each capture container may use up to 2 GB.
+
+The verdicts on feed sites are stored and measured but never sent to the alert sinks: an
+alert requires a site our own scoring found (`pending_alerts` in `ingest/store.py`). This
+keeps feed data out of the Discord channel, and keeps the alerts about our detections.
+
+The candidates file is unlabelled, so the evaluation refuses to read it. A person must label
+a site before it can enter `datasets/feed/`. The command refuses any output path under
+`datasets/`, so the tracked folder cannot receive feed candidates by mistake.
 
 The evaluation reads `datasets/eval.jsonl` and every file in `datasets/feed/`, once per
 site (`eval/dataset.py`, `load_all_datasets`).
@@ -56,8 +65,11 @@ commits have new hashes; the instance and Terraform references are listed in
 
 Copies that existed before the rewrite are outside the repository's control: other clones,
 any copy in a backup, and GitHub's cached pages until they expire. The backup bundle made
-for the rewrite, in the Windows temp folder, also contains the lines; delete it once the
-rewrite is verified.
+for the rewrite, in the Windows temp folder, also contains the lines.
+
+**The labelled feed sites exist in one place only:** `datasets/feed/openphish-eval.jsonl` on
+the owner's PC (plus the backup bundle). The README's measured results depend on them.
+Copy the file to a private location before deleting the bundle.
 
 ## Effect on reproducing the results
 
@@ -69,5 +81,6 @@ README. Running it with the local `datasets/feed/` file gives the same numbers.
 
 1. Ask OpenPhish in writing for permission to publish feed-derived data (optional; this
    would allow restoring the lines to the repository).
-2. Delete the backup bundle in the Windows temp folder (`lookalike-backup-before-rewrite.bundle`).
+2. Copy `datasets/feed/openphish-eval.jsonl` to a private location first, then delete the
+   backup bundle in the Windows temp folder (`lookalike-backup-before-rewrite.bundle`).
 3. Decide whether the S3 bucket may keep captures of feed sites (the bucket is private).
