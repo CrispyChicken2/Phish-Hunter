@@ -10,7 +10,12 @@ The budget is USD 20 a month (ADR 0002, `infra/budget.tf`). Its alerts go to the
 
 Every unit price below comes from the AWS Price List API (`aws pricing get-products`). The
 calls are read-only and were made with the admin profile. Each price is matched on the usage type for Stockholm
-(`EUN1-...`). The product description is shown next to each price, so the price
+(`EUN1-...`).
+
+**Cross-checked by the owner (2026-10-19):** the EC2 `t4g.small` Linux price and the EBS
+gp3 price were checked on the AWS public pricing pages for Stockholm. The AWS Pricing
+Calculator does not list either item, so those two cannot be checked there. The other
+lines still need the calculator check. The product description is shown next to each price, so the price
 can be checked against the console. The owner should still confirm each one in the AWS
 pricing calculator before relying on it.
 
