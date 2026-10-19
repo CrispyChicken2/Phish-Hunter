@@ -1,0 +1,19 @@
+[Unit]
+Description=Fetch the phishing feed, then capture its brand matches (P2.1)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+# Two steps, one after the other. The feed terms do not allow redistribution, so the
+# candidates stay in /var/lib/lookalike-hunter, which is not in git (docs/feed-data.md).
+# The command refuses any output path under datasets/.
+Type=oneshot
+User=lookalike
+Group=lookalike
+WorkingDirectory=/opt/lookalike-hunter
+Environment=LH_PROFILE=aws
+Environment=AWS_REGION=eu-north-1
+Environment=LH_CAPTURES_DIR=/var/lib/lookalike-hunter/captures
+ExecStart=/opt/lookalike-hunter/.venv/bin/lookalike-hunter dataset --fetch-feed --out /var/lib/lookalike-hunter/feed-candidates.jsonl
+ExecStart=/opt/lookalike-hunter/.venv/bin/lookalike-hunter capture --from-dataset /var/lib/lookalike-hunter/feed-candidates.jsonl --limit 20
+StandardError=append:/var/log/lookalike-hunter/feed.log

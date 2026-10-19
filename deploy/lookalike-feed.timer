@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the phishing feed capture every 6 hours (the feed itself updates every 12 hours)
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=6h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -28,8 +28,16 @@ update frequency as 12 hours.
 |---|---|---|
 | Labelled sites from our own alerts and calibration | `datasets/eval.jsonl` | yes |
 | Labelled sites from the OpenPhish feed | `datasets/feed/` | **no** (ignored by `.gitignore`) |
-| Feed lists fetched by the timer (P2.1) | `data/` on the instance and locally | **no** |
-| Captures of feed sites | the private S3 bucket, and `data/` | **no** (the bucket is private) |
+| Feed candidates fetched by the timer (P2.1) | `/var/lib/lookalike-hunter/feed-candidates.jsonl` on the instance | **no** (not in the repository) |
+| Captures of feed sites | the capture folder on the instance, then the private S3 bucket | **no** (the bucket is private) |
+
+**How the timer works (P2.1).** `deploy/lookalike-feed.timer` runs every 6 hours. It
+fetches the feed, keeps entries that mention a configured brand (a plain substring search,
+with no Scorer), and appends them to the candidates file. Then it captures up to 20
+candidates that have no screenshot yet. The candidates file is unlabelled, so the
+evaluation refuses to read it. A person must label a site before it can enter
+`datasets/feed/`. The command refuses any output path under `datasets/`, so the tracked
+folder cannot receive feed candidates by mistake.
 
 The evaluation reads `datasets/eval.jsonl` and every file in `datasets/feed/`, once per
 site (`eval/dataset.py`, `load_all_datasets`).

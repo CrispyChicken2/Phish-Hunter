@@ -225,8 +225,26 @@ def cmd_alerts(settings: Settings, args: argparse.Namespace) -> None:
         )
 
 
+def refuse_feed_output_in_datasets(out: Path) -> None:
+    """Feed-derived candidates must never be written under datasets/, which git tracks.
+
+    The feed's terms do not allow redistribution (docs/feed-data.md). Candidates belong in
+    data/, which git ignores. Labelled feed sites go to datasets/feed/, but only after a
+    human has labelled them, never as raw candidates.
+    """
+    tracked = Path("datasets").resolve()
+    target = out.resolve()
+    if target == tracked or tracked in target.parents:
+        raise SystemExit(
+            f"refusing to write feed-derived candidates to {out}: datasets/ is tracked by git. "
+            "Use data/feed-candidates.jsonl (see docs/feed-data.md)."
+        )
+
+
 def cmd_dataset(settings: Settings, args: argparse.Namespace) -> None:
     """Collect candidate sites for a human to label. Assigns no ground truth."""
+    if args.fetch_feed or args.feed_file is not None:
+        refuse_feed_output_in_datasets(args.out)
     candidates = []
     if args.feed_file is not None:
         text = args.feed_file.read_text(encoding="utf-8", errors="replace")
