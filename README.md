@@ -394,7 +394,10 @@ Security caveats that hardening does not remove:
   cannot tell a true result from a plausible false one, though: someone who
   escaped Chromium's sandbox could report a phishing site as unreachable, or
   supply a crafted PNG that the dashboard's image decoder then parses.
-- **Captures are never pruned**, so disk use grows without bound.
+- **Local captures are pruned only by `lookalike-hunter archive`**, which needs an S3
+  bucket configured. Without it, disk use on your machine grows without bound. On AWS,
+  captures are uploaded to S3, their local copies are removed after a successful upload,
+  and S3 expires them after `capture_retention_days` (90 days by default).
 - **A page's own text reaches the classifier prompt.** It is fenced and labelled
   as untrusted data, but cannot be made injection-proof: a page can still talk the
   model into a wrong label.
