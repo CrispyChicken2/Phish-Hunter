@@ -23,6 +23,12 @@
             "log_group_name": "/lookalike-hunter/backup",
             "log_stream_name": "{instance_id}",
             "timezone": "UTC"
+          },
+          {
+            "file_path": "/var/log/lookalike-hunter/feed.log",
+            "log_group_name": "/lookalike-hunter/feed",
+            "log_stream_name": "{instance_id}",
+            "timezone": "UTC"
           }
         ]
       }

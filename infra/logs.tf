@@ -12,7 +12,7 @@ resource "aws_cloudwatch_log_group" "service" {
   # checkov:skip=CKV_AWS_158: the default CloudWatch Logs encryption at rest applies. A KMS key is a
   # monthly charge outside the budget, and these logs hold no secret (secrets never reach them).
   # checkov:skip=CKV_AWS_338: 30 days is a deliberate retention (cost). Longer history is in S3 backups.
-  for_each = toset(["watch", "archive", "backup"])
+  for_each = toset(["watch", "archive", "backup", "feed"])
 
   name              = "/lookalike-hunter/${each.key}"
   retention_in_days = var.log_retention_days
