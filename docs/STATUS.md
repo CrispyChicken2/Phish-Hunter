@@ -65,7 +65,7 @@ Status: `todo`, `doing`, `review` (PR open), `done`, `blocked`.
 
 | ID | Ticket | Status | Notes |
 |---|---|---|---|
-| P0.1 | Verify `make check` equivalent on `main` and write this file | review | ⏸ show the ticket list to the user |
+| P0.1 | Verify `make check` equivalent on `main` and write this file | done | Ticket list approved by the owner on 2026-10-19. `make check` equivalent passes on `main` (ruff, format, mypy, pytest) |
 
 ### Phase 1: AWS deployment
 
