@@ -80,6 +80,19 @@ variable "backup_retention_days" {
   default     = 30
 }
 
+variable "log_retention_days" {
+  description = "Days the service logs stay in CloudWatch Logs (P1.9). Cost bound; history is in S3 backups."
+  type        = number
+  default     = 30
+}
+
+variable "alarm_email" {
+  description = "E-mail address for the alarm topic (P1.9). Null means no subscription. Owner's address: never commit it, use TF_VAR_alarm_email."
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
 variable "budget_limit_usd" {
   description = "Monthly cost ceiling in USD (ADR 0002, option A)."
   type        = number

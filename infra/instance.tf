@@ -76,8 +76,8 @@ resource "aws_iam_role_policy" "instance_session" {
   })
 }
 
-# Logs for the CloudWatch agent (P1.9). Limited to one prefix; the group itself is
-# created in P1.9, so nothing here can create or delete a group.
+# Logs for the CloudWatch agent (P1.9). Limited to one prefix. The groups are in logs.tf,
+# and this policy cannot create or delete them.
 resource "aws_iam_role_policy" "instance_write_logs" {
   name = "write-own-log-groups-only"
   role = aws_iam_role.instance.id
