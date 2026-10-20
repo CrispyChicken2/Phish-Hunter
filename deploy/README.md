@@ -49,7 +49,7 @@ Test it with `logrotate -d /etc/logrotate.d/lookalike-hunter` (dry run, changes 
 
 ## Phishing feed (P2.1)
 
-The timer only fetches the feed. The `watch` service captures the fresh candidates itself,
+The timer only fetches the feed. The `watch` service captures the fresh Feed entries itself,
 a few per cycle, so the instance must run a commit that has this feature
 (`watch.feed_entries_path` in `configs/aws.yaml`). Order matters:
 

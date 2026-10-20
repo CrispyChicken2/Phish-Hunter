@@ -65,7 +65,7 @@ async def run_cycle(
         stats.failed_stages += 1
         log.exception("watch.capture_failed")
     if settings.watch.feed_entries_path is not None:
-        # Feed candidates (P2.1): captured here, after the alerts, so only one browser
+        # Feed entries (P2.1): captured here, after the alerts, so only one browser
         # ever runs. Their verdicts are measured, never announced (see pending_alerts).
         try:
             targets = fresh_feed_targets(

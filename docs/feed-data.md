@@ -28,14 +28,14 @@ update frequency as 12 hours.
 |---|---|---|
 | Labelled sites from our own alerts and calibration | `datasets/eval.jsonl` | yes |
 | Labelled sites from the OpenPhish feed | `datasets/feed/` | **no** (ignored by `.gitignore`) |
-| Feed candidates fetched by the timer (P2.1) | `/var/lib/lookalike-hunter/feed-entries.jsonl` on the instance | **no** (not in the repository) |
+| Feed entries fetched by the timer (P2.1) | `/var/lib/lookalike-hunter/feed-entries.jsonl` on the instance | **no** (not in the repository) |
 | Captures of feed sites | the capture folder on the instance, then the private S3 bucket | **no** (the bucket is private) |
 
 **How it works (P2.1).** `deploy/lookalike-feed.timer` runs every 6 hours. It fetches the
 feed, keeps entries that mention a configured brand (a plain substring search, with no
-Scorer), and appends the new ones to the candidates file. It captures nothing itself.
+Scorer), and appends the new ones to the Feed entries file. It captures nothing itself.
 
-The `watch` service captures the candidates, after the alerts of each cycle: at most 5
+The `watch` service captures the Feed entries, after the alerts of each cycle: at most 5
 per cycle, newest first, only those listed in the last day, and each site only once. One
 process therefore runs one browser and writes to the database; the instance has 1.8 GB of
 memory and each capture container may use up to 2 GB.
@@ -44,9 +44,9 @@ The verdicts on feed sites are stored and measured but never sent to the alert s
 alert requires a site our own scoring found (`pending_alerts` in `ingest/store.py`). This
 keeps feed data out of the Discord channel, and keeps the alerts about our detections.
 
-The candidates file is unlabelled, so the evaluation refuses to read it. A person must label
+The Feed entries file is unlabelled, so the evaluation refuses to read it. A person must label
 a site before it can enter `datasets/feed/`. The command refuses any output path under
-`datasets/`, so the tracked folder cannot receive feed candidates by mistake.
+`datasets/`, so the tracked folder cannot receive Feed entries by mistake.
 
 The evaluation reads `datasets/eval.jsonl` and every file in `datasets/feed/`, once per
 site (`eval/dataset.py`, `load_all_datasets`).

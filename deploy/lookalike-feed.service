@@ -1,12 +1,12 @@
 [Unit]
-Description=Fetch the phishing feed and append new brand candidates (P2.1)
+Description=Fetch the phishing feed and append new Feed entries (P2.1)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-# Fetch only. The watch service captures the candidates itself, a few per cycle, so
+# Fetch only. The watch service captures the Feed entries itself, a few per cycle, so
 # only one browser and one database writer ever run (watch.feed_entries_path in
-# configs/aws.yaml). The feed terms do not allow redistribution, so the candidates
+# configs/aws.yaml). The feed terms do not allow redistribution, so the Feed entries
 # stay in /var/lib/lookalike-hunter, outside git; the command refuses any path under
 # datasets/ (docs/feed-data.md).
 Type=oneshot

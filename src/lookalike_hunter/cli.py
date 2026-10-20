@@ -226,11 +226,11 @@ def cmd_alerts(settings: Settings, args: argparse.Namespace) -> None:
 
 
 def refuse_feed_output_in_datasets(out: Path) -> None:
-    """Feed-derived candidates must never be written under datasets/, which git tracks.
+    """Feed entries must never be written under datasets/, which git tracks.
 
-    The feed's terms do not allow redistribution (docs/feed-data.md). Candidates belong in
-    data/, which git ignores. Labelled feed sites go to datasets/feed/, but only after a
-    human has labelled them, never as raw candidates.
+    The feed's terms do not allow redistribution (docs/feed-data.md). Feed entries belong
+    in data/, which git ignores. Labelled feed sites go to datasets/feed/, but only after a
+    human has labelled them, never as raw Feed entries.
     """
     # Both the folder next to the working directory and the one next to this checkout,
     # so an absolute path into the repository is refused from any directory.
@@ -241,7 +241,7 @@ def refuse_feed_output_in_datasets(out: Path) -> None:
     target = out.resolve()
     if any(target == folder or folder in target.parents for folder in tracked_folders):
         raise SystemExit(
-            f"refusing to write feed-derived candidates to {out}: datasets/ is tracked by git. "
+            f"refusing to write Feed entries to {out}: datasets/ is tracked by git. "
             "Use data/feed-entries.jsonl (see docs/feed-data.md)."
         )
 

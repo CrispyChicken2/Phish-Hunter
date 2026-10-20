@@ -27,7 +27,7 @@ def fresh_feed_targets(
     max_age_days: int,
     today: date | None = None,
 ) -> list[PendingCapture]:
-    """Candidates listed in the last ``max_age_days`` days and never captured, newest first.
+    """Feed entries listed in the last ``max_age_days`` days and never captured, newest first.
 
     A missing file is not an error: the feed timer may not have run yet.
     """
@@ -39,7 +39,7 @@ def fresh_feed_targets(
         for site in iter_dataset(feed_entries_path, allow_unlabelled=True)
         if site.labelled_at >= oldest
     ]
-    # The timer appends, so the newest candidates are at the end of the file.
+    # The timer appends, so the newest Feed entries are at the end of the file.
     newest_first = {site.fqdn: site for site in reversed(sites)}
     todo = store.uncaptured(list(newest_first), NEVER_RECAPTURE_H)[:limit]
     return [

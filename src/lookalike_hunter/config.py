@@ -163,7 +163,7 @@ class WatchConfig(BaseModel):
     # Time between triage cycles, and so the latency from a certificate to a
     # notification. Phishing kits are often taken down within hours.
     interval_s: float = 300.0
-    # Phishing-feed candidates to capture (P2.1), written by the feed timer. None
+    # Feed entries to capture (P2.1), written by the feed timer. None
     # turns the step off. Captured here, not by the timer, so one browser runs at a time.
     feed_entries_path: Path | None = None
     # Small, so a cycle stays short; 5 per 5-minute cycle covers a feed batch quickly.
