@@ -196,8 +196,13 @@ Two ways, and only one is safe for the database:
   runuser -u lookalike -- git -C /opt/lookalike-hunter fetch origin
   runuser -u lookalike -- git -C /opt/lookalike-hunter checkout --detach <new commit>
   runuser -u lookalike -- env HOME=/var/lib/lookalike-hunter bash -c 'cd /opt/lookalike-hunter && uv sync --locked --no-dev'
+  runuser -u lookalike -- env HOME=/var/lib/lookalike-hunter bash -c 'cd /opt/lookalike-hunter && docker compose --profile tools build capture'
   systemctl restart lookalike-watch
   ```
+
+  The `build` line matters: `docker compose run` builds the capture image only when
+  none exists, so without it the container keeps running the code of its first build
+  while the host runs the new one. It takes a few minutes, mostly the browser layer.
 
   Git runs as `lookalike`, the owner of the checkout: run as root, git refuses a
   repository owned by another user ("detected dubious ownership"). The fetch also
