@@ -1,7 +1,10 @@
 # ADR 0003: Egress proxy against DNS rebinding
 
-- **Status:** Proposed. The owner accepts or rejects it; nothing is implemented
-  before that (P3.3).
+- **Status:** Rejected by the owner, 2026-10-21. Captures run only on the AWS
+  instance (5,500+ there; none on the home machine since 2026-10-03), where
+  rebinding reaches nothing of value: IMDSv2 with a hop limit of 1 keeps the
+  credentials out of reach and nothing else listens in the VPC. The gap is real
+  only for captures from a home network; reopen this ADR before doing any.
 - **Date:** 2026-10-21
 - **Decided by:** project owner
 
