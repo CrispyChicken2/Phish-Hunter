@@ -98,6 +98,20 @@ reports sites that loaded on one side only, pages that differ (HTTP status, fina
 site, login form, title), and verdicts that differ. It only reads the databases.
 Captures from a home connection show your home address to the sites visited.
 
+### Detection on known phishing
+
+```bash
+uv run lookalike-hunter detection    # reads watch.feed_entries_path
+```
+
+For every Feed entry (known phishing from the feed) listed since monitoring began,
+it says whether our certificate scoring had flagged that site: alerted, stored
+below the alert threshold, or never seen, and whether the first flag came before,
+on or after the day the feed listed it. Sites on shared platforms (`*.vercel.app`,
+`*.github.io`) are counted apart as out of reach: they run under the platform's
+wildcard certificate, which never names them, so certificate monitoring cannot
+see them at all.
+
 To use a real vision model, put your key in `.env` (never in the YAML):
 
 ```bash

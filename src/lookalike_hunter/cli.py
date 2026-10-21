@@ -38,6 +38,7 @@ from lookalike_hunter.eval.cloaking import (
     recent_sites,
 )
 from lookalike_hunter.eval.dataset import iter_dataset
+from lookalike_hunter.eval.detection import Outcome, Timing, feed_detection
 from lookalike_hunter.eval.feeds import OPENPHISH_FEED_URL
 from lookalike_hunter.eval.report import write_report
 from lookalike_hunter.eval.runner import run_evaluation
@@ -564,6 +565,38 @@ def cmd_cloaking(settings: Settings, args: argparse.Namespace) -> None:
         print(_describe(args.against, pair.second))
 
 
+def cmd_detection(settings: Settings, args: argparse.Namespace) -> None:
+    """How much of the feed's known phishing our scoring flagged, and when."""
+    path = args.feed_entries or settings.watch.feed_entries_path
+    if path is None or not path.exists():
+        raise SystemExit("no Feed entries file: pass --feed-entries or set watch.feed_entries_path")
+    report = feed_detection(path, settings.db_path)
+    total = len(report.sites)
+    print(
+        f"{total} Feed entries listed since monitoring began "
+        f"({report.monitoring_since or 'no Matches yet'}); "
+        f"{report.listed_before_monitoring} listed earlier, left out"
+    )
+    if not total:
+        return
+    out_of_reach = report.count(Outcome.OUT_OF_REACH)
+    print(f"  out of reach (shared platform, no certificate names them): {out_of_reach}")
+    print(f"  within reach of certificate monitoring:                   {report.in_reach}")
+    for outcome in (Outcome.ALERTED, Outcome.MATCHED, Outcome.NOT_SEEN):
+        n = report.count(outcome)
+        share = f"{n / report.in_reach:.1%}" if report.in_reach else "-"
+        print(f"    {outcome.value:<10} {n:>5}  ({share} of those within reach)")
+    print("  alerted, by when we first flagged them:")
+    for timing in Timing:
+        print(f"    {timing.value:<24} {report.timing(timing):>5}")
+    if args.list:
+        for site in report.sites:
+            print(
+                f"{site.listed_on}  {site.outcome.value:<12} {safe_text(site.fqdn, 100)}"
+                + (f"  flagged {site.first_flagged:%Y-%m-%d %H:%M}" if site.first_flagged else "")
+            )
+
+
 def install_shutdown_handler() -> None:
     """Turn SIGTERM into KeyboardInterrupt so buffered work is flushed.
 
@@ -740,6 +773,15 @@ def main(argv: list[str] | None = None) -> None:
     )
     cloaking.add_argument("--limit", type=int, default=30, help="Sites listed in detail")
     cloaking.set_defaults(func=cmd_cloaking)
+
+    detection = sub.add_parser(
+        "detection", help="How much of the phishing feed our scoring flagged, and when"
+    )
+    detection.add_argument(
+        "--feed-entries", type=Path, default=None, help="Default: watch.feed_entries_path"
+    )
+    detection.add_argument("--list", action="store_true", help="Also list every Feed entry")
+    detection.set_defaults(func=cmd_detection)
 
     alerts = sub.add_parser("alerts", help="List recent alerts grouped by registered domain")
     alerts.add_argument("--limit", type=int, default=30)
