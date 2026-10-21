@@ -123,6 +123,8 @@ runbook (P1.13) before the instance is ever rebuilt:
 | CloudWatch agent installed with `dnf` and configured with `fetch-config` (P1.9) | the setup script is not changed, since that would replace the instance | `deploy/README.md`, `deploy/cloudwatch-agent.json` |
 | `/var/log/lookalike-hunter` created; archive, backup and watch logs go to files there (`StandardError=append:`), via the unit files and the `watch` drop-in (P1.9) | same | `deploy/*.service`, `deploy/lookalike-watch.service.d/logs.conf` |
 | logrotate for those files (P1.9) | same | `deploy/logrotate-lookalike-hunter` |
+| Feed timer and service from `deploy/` in `/etc/systemd/system`, enabled every 6 h; agent config with `feed.log` (P2.1, 2026-10-21) | same | `deploy/lookalike-feed.*`, `deploy/cloudwatch-agent.json` |
+| The host and the capture image run commit `25193fc` since 2026-10-21 18:25 UTC; the image was rebuilt with `docker compose --profile tools build capture` | P2.1, the outsized-result fix, and the Playwright 1.64 base image. Captures failed from 17:53 to about 18:25 UTC: the image had Playwright 1.64 without its browser | `repo_commit` in Terraform, to update at the next rebuild |
 
 ## Standing rules (from the mission)
 
