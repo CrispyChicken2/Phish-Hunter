@@ -60,19 +60,29 @@ def rescore(
     with connect_with_retry(db_path, read_only=True) as con:
         rows = con.execute(
             """
-            SELECT m.fqdn, m.brand, m.score, m.is_alert, m.features, c.issuer_org
+            SELECT m.fqdn, m.brand, m.score, m.is_alert, m.features, c.issuer_org,
+                   coalesce(list_contains(list_transform(c.all_domains, d -> lower(d)), m.fqdn)
+                         OR list_contains(list_transform(c.all_domains, d -> lower(d)),
+                                          '*.' || m.fqdn), false)
             FROM matches m LEFT JOIN certificates c USING (cert_sha256)
             ORDER BY m.fqdn, m.brand
             """
         ).fetchall()
 
     report = RescoreReport(checked=len(rows))
-    current: dict[tuple[str, str | None], dict[str, Any]] = {}
-    for fqdn, brand, old_score, was_alert, stored, issuer in rows:
-        key = (fqdn, issuer)
+    current: dict[tuple[str, str | None, bool | None], dict[str, Any]] = {}
+    for fqdn, brand, old_score, was_alert, stored, issuer, names_host in rows:
+        # The linked certificate is trusted only if it names this host. Before the
+        # parse fix, certificates sent with the empty-input hash were all filed under
+        # one row, so a Match could point at another site's certificate. Then the
+        # free-DV flag computed at ingestion, from the real certificate, is kept.
+        free_dv = None if names_host else bool(_stored_features(stored).get("free_dv_issuer"))
+        key = (fqdn, issuer if names_host else None, free_dv)
         if key not in current:
             # Floor 0: every Brand's real score, including those now below the floor.
-            current[key] = {m.brand: m for m in scorer.score(fqdn, issuer, floor=0.0)}
+            current[key] = {
+                m.brand: m for m in scorer.score(fqdn, key[1], floor=0.0, free_dv=free_dv)
+            }
         match = current[key].get(brand)
         # No score at all: the brand was removed, or this is now one of its domains.
         new_score = match.score if match else 0.0

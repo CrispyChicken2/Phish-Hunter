@@ -132,19 +132,25 @@ class Scorer:
         self._free_dv = [i.lower() for i in config.free_dv_issuers]
 
     def score(
-        self, raw_hostname: str, issuer_org: str | None = None, floor: float | None = None
+        self,
+        raw_hostname: str,
+        issuer_org: str | None = None,
+        floor: float | None = None,
+        free_dv: bool | None = None,
     ) -> list[Match]:
         """Return one Match per Brand whose score is at least the storage floor.
 
         ``floor`` overrides the configured storage floor; `rescore` passes 0 so a
-        stored Match that now scores below the floor gets its real score.
+        stored Match that now scores below the floor gets its real score. ``free_dv``
+        states the free-DV feature outright, for `rescore` when the issuer is lost.
         """
         store_floor = self._config.store_floor if floor is None else floor
         host = self._parse(raw_hostname)
         if host is None:
             return []
         variant_hits = self._variants.lookup(host.registered_domain)
-        free_dv = issuer_org is not None and any(i in issuer_org.lower() for i in self._free_dv)
+        if free_dv is None:
+            free_dv = issuer_org is not None and any(i in issuer_org.lower() for i in self._free_dv)
         full_sk = f"{host.subdomain_sk}.{host.label_sk}"
 
         matches: list[Match] = []

@@ -136,3 +136,19 @@ def test_the_command_is_a_dry_run_unless_asked(
     assert "stop being Alerts" in out and "no longer an Alert" in out
     assert "Dry run: nothing written" in out and "Applied." in out
     assert not any(alert for _, alert in stored(store).values())
+
+
+def test_a_match_linked_to_another_sites_certificate_keeps_its_free_dv_flag(
+    tmp_path: Path, settings: Settings
+) -> None:
+    """Seen on the instance: before the parse fix, Matches could point at another
+    site's certificate, whose issuer then removed a free-DV bonus that was right."""
+    store = MatchStore(tmp_path / "t.duckdb", settings.scoring.alert_threshold)
+    host = HOSTS[0]
+    (match,) = scorer_for(settings).score(host, "Let's Encrypt")
+    elsewhere = Certificate("e" * 64, NOW, "Microsoft Corporation", NOW, NOW, "log", ("x.test",))
+    store.write([(elsewhere, match)])
+
+    report = rescore(store.db_path, scorer_for(settings), settings.scoring.alert_threshold)
+
+    assert report.changes == []
