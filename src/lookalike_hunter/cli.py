@@ -30,6 +30,7 @@ from lookalike_hunter.eval.build import (
     hard_negative_candidates,
     write_candidates,
 )
+from lookalike_hunter.eval.cloaking import DEFAULT_MAX_GAP, SideCapture, compare, load_side
 from lookalike_hunter.eval.dataset import iter_dataset
 from lookalike_hunter.eval.feeds import OPENPHISH_FEED_URL
 from lookalike_hunter.eval.report import write_report
@@ -483,6 +484,58 @@ def cmd_verdicts(settings: Settings, args: argparse.Namespace) -> None:
             print(f"    screenshot: {safe_text(shot, 200)}")
 
 
+def _describe(vantage: str, side: SideCapture) -> str:
+    if not side.reachable:
+        return f"    {safe_text(vantage, 30)}: {safe_text(side.status, 20)}"
+    title = f' "{safe_text(side.title, 60)}"' if side.title else ""
+    login = "  login form" if side.has_login_form else ""
+    verdict = f"  verdict {safe_text(side.verdict, 12)}" if side.verdict else ""
+    return (
+        f"    {safe_text(vantage, 30)}: {side.http_status}  {safe_text(side.final_host, 80)}"
+        f"{title}{login}{verdict}"
+    )
+
+
+def cmd_cloaking(settings: Settings, args: argparse.Namespace) -> None:
+    """Compare the captures of the same sites from two Vantage points (CONTEXT.md)."""
+    vantage = args.vantage or settings.capture.vantage
+    if vantage is None:
+        raise SystemExit("no vantage point to compare from: pass --vantage or set capture.vantage")
+    db = args.db or settings.db_path
+    other_db = args.against_db or db
+    if vantage == args.against and db.resolve() == other_db.resolve():
+        raise SystemExit("both sides are the same captures: pick another --against")
+    report = compare(
+        load_side(db, vantage, args.backend),
+        load_side(other_db, args.against, args.backend),
+        vantage,
+        args.against,
+        timedelta(hours=args.max_gap_h),
+    )
+
+    print(
+        f"{len(report.pairs)} site(s) captured from both {safe_text(vantage, 30)} and "
+        f"{safe_text(args.against, 30)} within {args.max_gap_h:g} h of each other"
+    )
+    print(
+        f"  not compared: {report.too_far_apart} too far apart in time, "
+        f"{report.only_first} only from {safe_text(vantage, 30)}, "
+        f"{report.only_second} only from {safe_text(args.against, 30)}"
+    )
+    print(f"  unreachable on one side: {report.unreachable_on_one_side}")
+    print(f"  different content:       {report.different_content}")
+    print(f"  different verdict:       {report.different_verdict}")
+    for pair in report.differing[: args.limit]:
+        reasons = (
+            (["unreachable on one side"] if pair.unreachable_on_one_side else [])
+            + list(pair.content_differences)
+            + (["verdict"] if pair.different_verdict else [])
+        )
+        print(f"\n{safe_text(pair.fqdn, 120)}  differs: {', '.join(reasons)}")
+        print(_describe(vantage, pair.first))
+        print(_describe(args.against, pair.second))
+
+
 def install_shutdown_handler() -> None:
     """Turn SIGTERM into KeyboardInterrupt so buffered work is flushed.
 
@@ -619,6 +672,29 @@ def main(argv: list[str] | None = None) -> None:
     verdicts.add_argument("--limit", type=int, default=20)
     verdicts.add_argument("--label", default=None, help="Only this label, e.g. phishing")
     verdicts.set_defaults(func=cmd_verdicts)
+
+    cloaking = sub.add_parser(
+        "cloaking", help="Compare captures of the same sites from two vantage points"
+    )
+    cloaking.add_argument(
+        "--vantage", default=None, help="First side (default: capture.vantage of this config)"
+    )
+    cloaking.add_argument("--against", required=True, help="Second side, e.g. home")
+    cloaking.add_argument("--db", type=Path, default=None, help="First side's database")
+    cloaking.add_argument(
+        "--against-db", type=Path, default=None, help="Second side's database (default: --db)"
+    )
+    cloaking.add_argument(
+        "--max-gap-h",
+        type=float,
+        default=DEFAULT_MAX_GAP.total_seconds() / 3600,
+        help="Only pair captures this close in time, in hours",
+    )
+    cloaking.add_argument(
+        "--backend", default="mistral", help="Only compare verdicts from this backend"
+    )
+    cloaking.add_argument("--limit", type=int, default=30, help="Sites listed in detail")
+    cloaking.set_defaults(func=cmd_cloaking)
 
     alerts = sub.add_parser("alerts", help="List recent alerts grouped by registered domain")
     alerts.add_argument("--limit", type=int, default=30)

@@ -73,6 +73,27 @@ validates every result before it becomes a row. The container never sees the
 database. `--outside-container` runs the browser in-process instead, which puts
 a browser exploit, if a page carries one, on your own machine.
 
+### Cloaking: the same sites from two networks
+
+Phishing kits often show a harmless page to cloud addresses and the real one to
+ordinary visitors. Every capture records its **Vantage point** (`capture.vantage`,
+e.g. `aws-eu-north-1` on the instance), so captures of the same sites from two
+networks can be compared:
+
+```bash
+# On a second machine: capture with its own label, into its own database.
+LH_CAPTURE__VANTAGE=home uv run lookalike-hunter capture --limit 10
+
+# Then compare it with a copy of the instance's database.
+uv run lookalike-hunter cloaking --vantage aws-eu-north-1 --db aws.duckdb \
+    --against home --against-db data/lookalike.duckdb
+```
+
+It pairs each site's two closest captures (at most 6 h apart, `--max-gap-h`), and
+reports sites that loaded on one side only, pages that differ (HTTP status, final
+site, login form, title), and verdicts that differ. It only reads the databases.
+Captures from a home connection show your home address to the sites visited.
+
 To use a real vision model, put your key in `.env` (never in the YAML):
 
 ```bash
