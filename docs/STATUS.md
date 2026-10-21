@@ -26,8 +26,8 @@ convenience, not a gap in the checks.
   (`src/lookalike_hunter/scoring/`, `variants/`).
 - Passive capture in a hardened container: non-root, all capabilities dropped,
   `no-new-privileges`, read-only root filesystem, memory and PID caps, browser
-  sandbox enabled. `seccomp=unconfined` is a known, documented trade-off
-  (`docker-compose.yml`, README).
+  sandbox enabled, under Docker's default seccomp profile plus the four calls the
+  sandbox needs (`docker/capture/seccomp-chromium.json`, P3.2; was `seccomp=unconfined`).
 - Result handoff: the host validates every container result before it becomes a row
   (`capture/handoff.py`).
 - VLM classification (`classify/`, Mistral, default `ministral-8b-latest`) and a stub
@@ -104,7 +104,7 @@ Status: `todo`, `doing`, `review` (PR open), `done`, `blocked`.
 | ID | Ticket | Status | Notes |
 |---|---|---|---|
 | P3.1 | `rescore` command: recompute stored Matches after the weights change | review | Built 2026-10-21 (`ingest/rescore.py`). Dry run by default, `--apply` writes in one transaction. Rescores each row with its certificate's stored issuer, since the free-DV bonus depends on it. Rows are updated, never deleted: one now below the storage floor keeps its real score (the Scorer takes an optional `floor`, 0 here) and stops being an Alert; a brand no longer configured scores 0. A row that becomes an Alert enters the capture queue, so it may be visited and announced. Rejected: deleting rows below the floor (irreversible, loses first sighting and capture links); scoring every hostname of stored certificates (creates new Matches, and only certificates that already matched are stored, so it would be a biased sweep). Not run on the instance |
-| P3.2 | Vendored Chrome seccomp profile replacing `seccomp=unconfined`; sandbox kept enabled; a test proves the sandbox starts | todo | Strengthens the container. It does not weaken it |
+| P3.2 | Vendored Chrome seccomp profile replacing `seccomp=unconfined`; sandbox kept enabled; a test proves the sandbox starts | review | Built 2026-10-21. `docker/capture/seccomp-chromium.json` is Docker's default profile (moby v27.5.1) plus one rule allowing `chroot`, `clone`, `setns`, `unshare`: Playwright's published profile adds the last three; `chroot` is added because this container drops every capability, and Chromium chroots each renderer into an empty directory. `tests/test_seccomp.py`: the file minus that rule hashes to Docker's default; no dangerous call (mount, bpf, kexec_load, keyctl...) is allowed without a capability; compose uses the file and never `unconfined`. Two tests run only where the capture image exists: Chromium starts sandboxed through the real compose service, and fails under Docker's default (the control). Docker was not running on the development machine, so those two were not run here: verification is on the instance. Rejected: Chromium's `--no-sandbox` under Docker's default profile, which would trade the renderer's sandbox for the container filter. Strengthens the container. It does not weaken it |
 | P3.3 | Egress proxy against DNS rebinding: resolve once, check the address, connect to that address | todo | ADR first; ⏸ user approval before implementation |
 
 ## Manual changes on the instance (not yet in Terraform)

@@ -267,11 +267,15 @@ What the browser leaves behind is treated as hostile too, because the host reads
 | Dashboard | Hostile text rendered as plain text: Markdown would turn `[x](url)` into a link and `![](url)` into a request to the attacker's server. Bound to localhost |
 | Reports | Model and page text wrapped in Markdown code spans that cannot be closed |
 
-Docker's default seccomp profile blocks the user namespaces Chromium's sandbox
-needs, so the compose service sets `seccomp=unconfined`: it is one filter or the
-other. The renderer executes the attacker's content and Chromium confines it with
-a stricter, purpose-built filter, so the browser sandbox wins. Vendoring a Chrome
-seccomp profile would give both and is the right follow-up.
+The container keeps both a system-call filter and the browser sandbox. Docker's
+default seccomp profile allows the namespace and `chroot` calls Chromium's sandbox
+needs only to a container holding capabilities this one has dropped, so the
+service uses `docker/capture/seccomp-chromium.json`: Docker's default (moby
+v27.5.1) plus one rule allowing those four calls, as Playwright's own profile
+does. A test checks the file is exactly that, nothing more; another, run where the
+capture image exists, starts Chromium with its sandbox in the real container and
+checks that Docker's default alone cannot. Earlier versions ran
+`seccomp=unconfined` to keep the sandbox.
 
 **What this does not hide:** the site owner sees your IP address and knows someone
 looked. Use a VPN if that matters.

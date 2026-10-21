@@ -93,7 +93,7 @@ class BrowserCapturer:
             headless=True,
             # Playwright disables Chromium's own sandbox by default. The renderer is
             # the process that executes attacker-controlled content, so we keep it.
-            # In Docker this needs seccomp=unconfined (see docker-compose.yml).
+            # In Docker this needs the seccomp profile in docker/capture/.
             chromium_sandbox=self.config.chromium_sandbox,
             args=[
                 "--disable-background-networking",
