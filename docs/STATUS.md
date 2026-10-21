@@ -163,16 +163,17 @@ runbook (P1.13) before the instance is ever rebuilt:
 - [x] **P1.10:** decided: Terraform manages the existing AWS Budget (imported, applied 2026-10-19).
 - [x] **P1.5 (after P1.12):** (Mistral key checked: HTTP 200 on the instance. Webhook tested on the instance: HTTP 204 from Discord, 2026-10-19. The first webhook was no longer valid afterwards, so a new one was created and stored in SSM the same day, and `watch` was restarted to read it. The message was received in Discord.) enter `MISTRAL_API_KEY` and `LH_ALERT__WEBHOOK_URL` into
       SSM Parameter Store as SecureString, by hand.
-- [ ] **P1.12:** run `terraform apply` yourself. The agent never applies.
+- [x] **P1.12:** run `terraform apply` yourself (done 2026-10-18). The agent never applies.
 - [ ] **P1.13:** check that the backup service has its bucket drop-in (`LH_BACKUP__BUCKET`):
       `systemctl show lookalike-backup -p Environment` on the instance. The drop-in is not in the
       repository, so note its path here once it is confirmed.
-- [ ] **Feed data:** copy `datasets/feed/openphish-eval.jsonl` to a private location. It is the
+- [x] **Feed data:** copied to a private folder outside the repository on 2026-10-21. Copy `datasets/feed/openphish-eval.jsonl` to a private location. It is the
       only copy of the 27 labelled feed sites, apart from the backup bundle in the temp folder.
-- [ ] **P2.1:** plan and apply (adds the `/lookalike-hunter/feed` log group), update the code on
+- [x] **P2.1 (done 2026-10-21):** plan and apply (adds the `/lookalike-hunter/feed` log group), update the code on
       the instance, then install the feed timer, in the order given in `deploy/README.md`.
-- [x] **P1.9:** `terraform apply` done 2026-10-19 (10 added). No e-mail subscription yet: add
-      `TF_VAR_alarm_email` and apply again once `watch` runs, then confirm the link AWS sends.
+- [x] **P1.9:** `terraform apply` done 2026-10-19 (10 added). Alarm e-mail: skipped by the
+      owner on 2026-10-22 (Discord messages are enough). The alarms still exist; adding
+      `TF_VAR_alarm_email` later is all it takes (`docs/deploy-aws.md`).
 - [ ] **P1.9, on the instance:** copy the files in `deploy/` and install the agent, as in
       `deploy/README.md`. Then check the agent is running and the three log streams appear.
 - [ ] **P1.9:** the `no-certificates` alarm will fire until `watch` is started (P1.5). Expect it.

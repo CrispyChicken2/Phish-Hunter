@@ -83,4 +83,5 @@ README. Running it with the local `datasets/feed/` file gives the same numbers.
    would allow restoring the lines to the repository).
 2. Copy `datasets/feed/openphish-eval.jsonl` to a private location first, then delete the
    backup bundle in the Windows temp folder (`lookalike-backup-before-rewrite.bundle`).
-3. Decide whether the S3 bucket may keep captures of feed sites (the bucket is private).
+3. ~~Decide whether the S3 bucket may keep captures of feed sites.~~ Decided 2026-10-22:
+   yes. The bucket is private, and the captures are the evidence behind the labels.

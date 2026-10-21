@@ -1,8 +1,8 @@
 # ADR 0001: Single-instance deployment on EC2
 
-- **Status:** Proposed, amended by ADR 0002. The budget is now $20/month, which the
-  deployment in `infra/` follows (ADR 0002, option A). The owner accepts or rejects this
-  ADR; the code does not decide it.
+- **Status:** Accepted by the owner on 2026-10-22, as amended by ADR 0002: the budget
+  is $20/month, which the deployment in `infra/` follows (ADR 0002, option A). The
+  instance has run the full pipeline since 2026-10-19.
 - **Date:** 2026-10-17
 - **Decided by:** project owner
 
