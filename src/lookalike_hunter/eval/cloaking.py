@@ -165,6 +165,25 @@ def load_side(db_path: Path, vantage: str, backend: str | None) -> dict[str, lis
     return side
 
 
+def recent_sites(db_path: Path, since_h: float, vantage: str | None = None) -> list[str]:
+    """Hostnames captured in the last ``since_h`` hours, newest first.
+
+    Feeds the second side of a comparison: capturing exactly these sites, soon
+    after, is what makes the two sides comparable. Errors and timeouts count too,
+    since "unreachable from one side only" is one of the findings.
+    """
+    with connect_with_retry(db_path, read_only=True) as con:
+        rows = con.execute(
+            """
+            SELECT fqdn FROM captures
+            WHERE captured_at > now() - INTERVAL (?) HOUR AND (? IS NULL OR vantage = ?)
+            GROUP BY fqdn ORDER BY max(captured_at) DESC
+            """,
+            [since_h, vantage, vantage],
+        ).fetchall()
+    return [row[0] for row in rows]
+
+
 def compare(
     first: dict[str, list[SideCapture]],
     second: dict[str, list[SideCapture]],

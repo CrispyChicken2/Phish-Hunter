@@ -7,11 +7,18 @@ from typing import Any
 import pytest
 
 from lookalike_hunter.capture.models import CaptureResult, CaptureStatus
+from lookalike_hunter.capture.runner import CaptureRunStats
 from lookalike_hunter.capture.signals import PageSignals
 from lookalike_hunter.classify.schema import Label, Verdict
 from lookalike_hunter.cli import main
-from lookalike_hunter.eval.cloaking import SideCapture, SitePair, compare, load_side
-from lookalike_hunter.ingest.store import MatchStore
+from lookalike_hunter.eval.cloaking import (
+    SideCapture,
+    SitePair,
+    compare,
+    load_side,
+    recent_sites,
+)
+from lookalike_hunter.ingest.store import MatchStore, PendingCapture
 
 ROOT = Path(__file__).parents[1]
 NOW = datetime(2026, 10, 21, 12, 0, tzinfo=UTC)
@@ -210,3 +217,78 @@ def test_the_command_refuses_to_compare_a_side_with_itself(tmp_path: Path) -> No
                 "--db", str(tmp_path / "t.duckdb"),
             ]
         )  # fmt: skip
+
+
+# ------------------------------------------------- capturing the other side's sites
+
+
+def capture_at(store: MatchStore, fqdn: str, hours_ago: float, vantage: str) -> None:
+    store.save_capture(
+        CaptureResult(
+            fqdn,
+            f"https://{fqdn}/",
+            CaptureStatus.TIMEOUT,
+            datetime.now(UTC) - timedelta(hours=hours_ago),
+            15000,
+        ),
+        vantage=vantage,
+    )
+
+
+def test_recent_sites_are_the_newest_first_within_the_window(tmp_path: Path) -> None:
+    store = MatchStore(tmp_path / "aws.duckdb", 0.7)
+    capture_at(store, "old.test", 10, "aws")
+    capture_at(store, "older-but-recent.test", 3, "aws")
+    capture_at(store, "newest.test", 1, "aws")
+    capture_at(store, "elsewhere.test", 1, "home")
+
+    assert recent_sites(store.db_path, since_h=6, vantage="aws") == [
+        "newest.test",
+        "older-but-recent.test",
+    ]
+
+
+def run_capture(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *extra: str
+) -> list[PendingCapture] | None:
+    """Run `capture` with the visit replaced, and return the targets it chose."""
+    chosen: list[list[PendingCapture] | None] = []
+
+    async def fake_run_captures(
+        store: object,
+        config: object,
+        limit: object,
+        targets: list[PendingCapture] | None,
+        executor: object,
+    ) -> CaptureRunStats:
+        chosen.append(targets)
+        return CaptureRunStats()
+
+    monkeypatch.setattr("lookalike_hunter.cli.run_captures", fake_run_captures)
+    monkeypatch.setenv("LH_DB_PATH", str(tmp_path / "home.duckdb"))
+    main(["--config", str(ROOT / "configs" / "default.yaml"), "capture", *extra])
+    return chosen[0]
+
+
+def test_capture_can_target_the_sites_another_database_just_captured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    aws = MatchStore(tmp_path / "aws.duckdb", 0.7)
+    capture_at(aws, "a.test", 1, "aws-eu-north-1")
+    capture_at(aws, "b.test", 2, "aws-eu-north-1")
+    capture_at(MatchStore(tmp_path / "home.duckdb", 0.7), "b.test", 1, "home")  # done already
+    monkeypatch.setenv("LH_CAPTURE__VANTAGE", "home")
+
+    targets = run_capture(monkeypatch, tmp_path, "--same-sites-as", str(aws.db_path))
+
+    assert targets is not None and [t.fqdn for t in targets] == ["a.test"]
+
+
+def test_same_sites_capture_needs_a_vantage_point(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Captures without one could never be compared, so the visits would be wasted."""
+    monkeypatch.delenv("LH_CAPTURE__VANTAGE", raising=False)
+
+    with pytest.raises(SystemExit, match="vantage point"):
+        run_capture(monkeypatch, tmp_path, "--same-sites-as", str(tmp_path / "aws.duckdb"))

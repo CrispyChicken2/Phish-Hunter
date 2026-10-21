@@ -30,7 +30,13 @@ from lookalike_hunter.eval.build import (
     hard_negative_candidates,
     write_candidates,
 )
-from lookalike_hunter.eval.cloaking import DEFAULT_MAX_GAP, SideCapture, compare, load_side
+from lookalike_hunter.eval.cloaking import (
+    DEFAULT_MAX_GAP,
+    SideCapture,
+    compare,
+    load_side,
+    recent_sites,
+)
 from lookalike_hunter.eval.dataset import iter_dataset
 from lookalike_hunter.eval.feeds import OPENPHISH_FEED_URL
 from lookalike_hunter.eval.report import write_report
@@ -100,6 +106,26 @@ def _dataset_targets(
     ]
 
 
+def _same_sites_targets(
+    settings: Settings, store: MatchStore, args: argparse.Namespace
+) -> list[PendingCapture]:
+    """The sites another database captured recently, for a cloaking comparison.
+
+    Refused without a Vantage point: unlabelled captures cannot be compared later.
+    """
+    if settings.capture.vantage is None:
+        raise SystemExit(
+            "set this machine's vantage point first (e.g. LH_CAPTURE__VANTAGE=home): "
+            "captures without one cannot be compared"
+        )
+    if args.same_sites_as.resolve() == settings.db_path.resolve():
+        raise SystemExit("--same-sites-as must be another database, e.g. a copy of the instance's")
+    sites = recent_sites(args.same_sites_as, args.since_h, args.other_vantage)
+    todo = store.uncaptured(sites, args.since_h)[: args.limit or len(sites)]
+    log.info("capture.same_sites", found=len(sites), targets=len(todo), since_h=args.since_h)
+    return [PendingCapture(fqdn, fqdn, "", 0.0) for fqdn in todo]
+
+
 def cmd_capture(settings: Settings, args: argparse.Namespace) -> None:
     """Pick the targets, have the capture container visit them, import the results.
 
@@ -114,7 +140,9 @@ def cmd_capture(settings: Settings, args: argparse.Namespace) -> None:
         )
     store = MatchStore(settings.db_path, settings.scoring.alert_threshold)
     targets = None
-    if args.from_dataset is not None:
+    if args.same_sites_as is not None:
+        targets = _same_sites_targets(settings, store, args)
+    elif args.from_dataset is not None:
         targets = _dataset_targets(
             store, args.from_dataset, args.limit, settings.capture.recapture_after_h
         )
@@ -573,6 +601,23 @@ def main(argv: list[str] | None = None) -> None:
         type=Path,
         default=None,
         help="Capture the sites in a dataset file instead of pending alerts",
+    )
+    capture.add_argument(
+        "--same-sites-as",
+        type=Path,
+        default=None,
+        help="Capture the sites another database captured recently (cloaking comparison)",
+    )
+    capture.add_argument(
+        "--other-vantage",
+        default=None,
+        help="With --same-sites-as: only that database's captures from this vantage point",
+    )
+    capture.add_argument(
+        "--since-h",
+        type=float,
+        default=DEFAULT_MAX_GAP.total_seconds() / 3600,
+        help="With --same-sites-as: how recent, in hours",
     )
     capture.add_argument(
         "--outside-container",
