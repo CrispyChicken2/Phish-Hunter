@@ -93,6 +93,38 @@ async def test_results_with_rejections_are_kept_for_inspection(
     assert results_path(config.output_dir, jobs[0].job_id).exists()
 
 
+async def test_a_site_whose_result_is_refused_is_not_retried_every_batch(
+    store: MatchStore, config: CaptureConfig
+) -> None:
+    """Seen in production: the same two refused sites took two slots of every batch."""
+
+    async def container(job: CaptureJob, root: Path) -> None:
+        path = results_path(root, job.job_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text('{"fqdn": "evil.test", "http_status": 99999}\n', encoding="utf-8")
+
+    stats = await run_captures(store, config, targets=TARGETS, executor=container)
+
+    assert stats.rejected == 1 and stats.missing == 1
+    assert store.uncaptured(["evil.test"], config.recapture_after_h) == []
+    with duckdb.connect(str(store.db_path), read_only=True) as con:
+        assert con.execute("SELECT status FROM captures").fetchall() == [("error",)]
+
+
+async def test_sites_a_crashed_container_never_reached_stay_pending(
+    store: MatchStore, config: CaptureConfig
+) -> None:
+    two = [*TARGETS, PendingCapture("second.test", "second.test", "paypal", 0.8)]
+
+    async def crashing_container(job: CaptureJob, root: Path) -> None:
+        ResultWriter(root, job.job_id).write(timeout_result("evil.test"))
+        raise CaptureExecutionError("capture container exited with status 137")
+
+    await run_captures(store, config, targets=two, executor=crashing_container)
+
+    assert store.uncaptured(["second.test"], config.recapture_after_h) == ["second.test"]
+
+
 async def test_what_was_visited_before_a_crash_is_still_imported(
     store: MatchStore, config: CaptureConfig
 ) -> None:

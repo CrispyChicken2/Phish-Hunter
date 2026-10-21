@@ -38,6 +38,17 @@ MAX_RESULTS_BYTES = 5_000_000
 MAX_SCREENSHOT_BYTES = 30_000_000
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
+# Field bounds the host enforces on every result line. The container trims its own
+# record to them first: a page that redirects to a 120,000-character URL, or answers
+# with HTTP 999, is still a page worth a screenshot, and must not lose its whole result.
+MAX_URL_CHARS = 2100
+MAX_TITLE_CHARS = 300
+MAX_ERROR_CHARS = 2000
+MAX_HOST_CHARS = 253
+MAX_FORM_TARGETS = 50
+MAX_ELEMENT_COUNT = 10_000
+HTTP_STATUS_MIN, HTTP_STATUS_MAX = 100, 599
+
 _JOB_ID_RE = re.compile(r"^[a-z0-9-]{1,64}$")
 
 
@@ -95,18 +106,24 @@ class ResultWriter:
         self.path.parent.mkdir(parents=True, exist_ok=True)
 
     def write(self, result: CaptureResult) -> None:
+        error = result.error
+        http_status = result.http_status
+        if http_status is not None and not HTTP_STATUS_MIN <= http_status <= HTTP_STATUS_MAX:
+            # Kept as a note: the code itself is not a valid HTTP status to store.
+            error = f"non-standard HTTP status {http_status}" + (f"; {error}" if error else "")
+            http_status = None
         record = {
             "fqdn": result.fqdn,
             "url": result.url,
             "status": str(result.status),
             "captured_at": result.captured_at.isoformat(),
             "duration_ms": result.duration_ms,
-            "final_url": result.final_url,
-            "http_status": result.http_status,
+            "final_url": _cut(result.final_url, MAX_URL_CHARS),
+            "http_status": http_status,
             "screenshot_path": _posix(result.screenshot_path),
             "html_path": _posix(result.html_path),
-            "signals": asdict(result.signals) if result.signals else None,
-            "error": result.error,
+            "signals": _bounded_signals(result.signals),
+            "error": _cut(error, MAX_ERROR_CHARS),
         }
         with self.path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(record) + "\n")
@@ -116,35 +133,55 @@ def _posix(path: Path | None) -> str | None:
     return path.as_posix() if path is not None else None
 
 
+def _cut(text: str | None, limit: int) -> str | None:
+    return text[:limit] if text is not None else None
+
+
+def _bounded_signals(signals: PageSignals | None) -> dict[str, object] | None:
+    """The page's signals within the host's bounds; a hostile page sets their size."""
+    if signals is None:
+        return None
+    record = asdict(signals)
+    record["title"] = _cut(signals.title, MAX_TITLE_CHARS)
+    record["cross_domain_form_targets"] = [
+        host[:MAX_HOST_CHARS] for host in signals.cross_domain_form_targets[:MAX_FORM_TARGETS]
+    ]
+    for count in ("form_count", "iframe_count", "password_input_count"):
+        record[count] = min(record[count], MAX_ELEMENT_COUNT)
+    return record
+
+
 # --------------------------------------------------------------------- host side
 
 
 class _SignalsRecord(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    title: str | None = Field(default=None, max_length=300)
-    form_count: int = Field(ge=0, le=10_000)
+    title: str | None = Field(default=None, max_length=MAX_TITLE_CHARS)
+    form_count: int = Field(ge=0, le=MAX_ELEMENT_COUNT)
     has_password_input: bool
     has_credential_field: bool
-    cross_domain_form_targets: list[Annotated[str, Field(max_length=253)]] = Field(max_length=50)
-    iframe_count: int = Field(ge=0, le=10_000)
-    password_input_count: int = Field(ge=0, le=10_000)
+    cross_domain_form_targets: list[Annotated[str, Field(max_length=MAX_HOST_CHARS)]] = Field(
+        max_length=MAX_FORM_TARGETS
+    )
+    iframe_count: int = Field(ge=0, le=MAX_ELEMENT_COUNT)
+    password_input_count: int = Field(ge=0, le=MAX_ELEMENT_COUNT)
 
 
 class _ResultRecord(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     fqdn: str = Field(max_length=300)
-    url: str = Field(max_length=2100)
+    url: str = Field(max_length=MAX_URL_CHARS)
     status: CaptureStatus
     captured_at: AwareDatetime
     duration_ms: int = Field(ge=0, le=86_400_000)
-    final_url: str | None = Field(default=None, max_length=2100)
-    http_status: int | None = Field(default=None, ge=100, le=599)
+    final_url: str | None = Field(default=None, max_length=MAX_URL_CHARS)
+    http_status: int | None = Field(default=None, ge=HTTP_STATUS_MIN, le=HTTP_STATUS_MAX)
     screenshot_path: str | None = Field(default=None, max_length=300)
     html_path: str | None = Field(default=None, max_length=300)
     signals: _SignalsRecord | None = None
-    error: str | None = Field(default=None, max_length=2000)
+    error: str | None = Field(default=None, max_length=MAX_ERROR_CHARS)
 
 
 @dataclass

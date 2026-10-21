@@ -14,6 +14,7 @@ import subprocess
 from collections import Counter
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 
 import duckdb
@@ -27,7 +28,8 @@ from lookalike_hunter.capture.handoff import (
     results_path,
     write_job,
 )
-from lookalike_hunter.capture.models import CaptureStatus
+from lookalike_hunter.capture.models import CaptureResult, CaptureStatus
+from lookalike_hunter.capture.policy import candidate_urls
 from lookalike_hunter.config import CaptureConfig
 from lookalike_hunter.ingest.store import LockContentionError, MatchStore, PendingCapture
 from lookalike_hunter.logging import get_logger
@@ -180,6 +182,8 @@ def _save(store: MatchStore, report: ImportReport, job: CaptureJob, stats: Captu
         log.warning("capture.result_rejected", job=job.job_id, reason=reason)
     stats.rejected = len(report.rejected)
     stats.missing = len(job.targets) - len(report.results)
+    if not stats.execution_failed:
+        _record_without_result(store, report, job)
     for result in report.results:
         stats.attempted += 1
         stats.by_status[str(result.status)] += 1
@@ -201,6 +205,36 @@ def _save(store: MatchStore, report: ImportReport, job: CaptureJob, stats: Captu
             duration_ms=result.duration_ms,
             error=result.error,
         )
+
+
+def _record_without_result(store: MatchStore, report: ImportReport, job: CaptureJob) -> None:
+    """Store an error Capture for each target the container finished without a valid result.
+
+    Without a row, the site counts as never visited and is picked again in every
+    batch, forever: a page whose result is always refused would take a slot each
+    cycle. The row is written by the host from the job, never from the container's
+    output, and lets the usual recapture delay apply. Not done when the container
+    failed: its unvisited targets were never tried and stay pending.
+    """
+    answered = {result.fqdn for result in report.results}
+    now = datetime.now(UTC)
+    for fqdn in job.targets:
+        if fqdn in answered:
+            continue
+        log.warning("capture.no_valid_result", job=job.job_id, fqdn=fqdn)
+        try:
+            store.save_capture(
+                CaptureResult(
+                    fqdn=fqdn,
+                    url=candidate_urls(fqdn, job.config.schemes)[0],
+                    status=CaptureStatus.ERROR,
+                    captured_at=now,
+                    duration_ms=0,
+                    error="no valid result from the capture container",
+                )
+            )
+        except (LockContentionError, duckdb.Error) as exc:
+            log.error("capture.save_failed", fqdn=fqdn, error=str(exc)[:300])
 
 
 def _clean_up(root: Path, job: CaptureJob, report: ImportReport) -> None:

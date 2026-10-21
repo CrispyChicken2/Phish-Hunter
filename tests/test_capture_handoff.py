@@ -6,13 +6,17 @@ database the host trusts.
 """
 
 import json
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
 from lookalike_hunter.capture.handoff import (
+    MAX_ELEMENT_COUNT,
+    MAX_FORM_TARGETS,
     MAX_RESULTS_BYTES,
+    MAX_URL_CHARS,
     PNG_SIGNATURE,
     CaptureJob,
     ResultWriter,
@@ -110,6 +114,35 @@ def test_no_results_file_means_no_results(tmp_path: Path) -> None:
     assert report.results == [] and report.rejected == []
 
 
+def test_a_page_with_outsized_values_keeps_its_result(tmp_path: Path) -> None:
+    """Seen in production: a 122,888-character redirect URL, and an HTTP status above 599.
+
+    The page decides these values, so a kit could otherwise make itself impossible to
+    record. The container trims them to the host's bounds before writing.
+    """
+    job = job_for("evil.test")
+    sent = replace(
+        ok_result(tmp_path),
+        final_url="https://evil.test/?" + "a" * 122_888,
+        http_status=999,
+        signals=PageSignals(
+            title="t" * 5000,
+            form_count=50_000,
+            cross_domain_form_targets=[f"{'x' * 300}{n}.test" for n in range(80)],
+        ),
+    )
+    ResultWriter(tmp_path, job.job_id).write(sent)
+
+    report = import_results(tmp_path, job)
+
+    assert report.rejected == []
+    [got] = report.results
+    assert got.final_url is not None and len(got.final_url) == MAX_URL_CHARS
+    assert got.http_status is None and got.error == "non-standard HTTP status 999"
+    assert got.signals is not None and got.signals.form_count == MAX_ELEMENT_COUNT
+    assert len(got.signals.cross_domain_form_targets) == MAX_FORM_TARGETS
+
+
 # ------------------------------------------------------------- refused output
 
 
@@ -147,6 +180,8 @@ def test_a_url_unrelated_to_the_hostname_is_refused(tmp_path: Path) -> None:
         {"status": "owned"},
         {"duration_ms": -1},
         {"http_status": 99999},
+        {"http_status": 999},
+        {"final_url": "https://evil.test/?" + "a" * 3000},
         {"captured_at": "2026-10-03T09:00:00"},  # no timezone
         {"error": "x" * 5000},
         {"surprise": "extra field"},
