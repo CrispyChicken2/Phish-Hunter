@@ -228,11 +228,11 @@ but not read them (403). Downloading changes nothing in AWS.
 aws sso login --profile PhishHunter-apply
 $b = terraform -chdir=infra output -raw captures_bucket_name
 $latest = (aws s3 ls "s3://$b/backups/" --profile PhishHunter-apply | Select-String "database-" | Select-Object -Last 1).ToString().Split()[-1]
-New-Item -ItemType Directory -Force dataws | Out-Null
-aws s3 cp "s3://$b/backups/$latest" dataws\ --profile PhishHunter-apply
-tar -xzf "dataws\$latest" -C dataws
+New-Item -ItemType Directory -Force data\aws | Out-Null
+aws s3 cp "s3://$b/backups/$latest" data\aws\ --profile PhishHunter-apply
+tar -xzf "data\aws\$latest" -C data\aws
 uv run python -c "import duckdb; duckdb.connect('data/aws/lookalike.duckdb').execute('''IMPORT DATABASE 'data/aws/export' ''')"
-aws s3 sync "s3://$b/captures" dataws\captures --exclude "*" --include "*.png" --profile PhishHunter-apply
+aws s3 sync "s3://$b/captures" data\aws\captures --exclude "*" --include "*.png" --profile PhishHunter-apply
 $env:LH_DB_PATH = "data/aws/lookalike.duckdb"
 $env:LH_CAPTURE__OUTPUT_DIR = "data/aws/captures"
 uv run --extra dashboard streamlit run src/lookalike_hunter/dashboard/app.py
