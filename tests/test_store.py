@@ -152,3 +152,34 @@ def test_capture_paths_are_stored_with_forward_slashes(tmp_path: Path) -> None:
     with duckdb.connect(str(store.db_path), read_only=True) as con:
         row = con.execute("SELECT screenshot_path, html_path FROM captures").fetchone()
     assert row == ("a.test/shot.png", "a.test/page.html.txt")
+
+
+def test_a_database_from_before_vantage_points_gains_the_column(tmp_path: Path) -> None:
+    db = tmp_path / "old.duckdb"
+    with duckdb.connect(str(db)) as con:
+        # The captures table as it was before P2.2, with one row in it.
+        con.execute("CREATE SEQUENCE captures_id_seq START 2")
+        con.execute(
+            "CREATE TABLE captures ("
+            " capture_id BIGINT PRIMARY KEY DEFAULT nextval('captures_id_seq'),"
+            " fqdn VARCHAR NOT NULL,"
+            " url VARCHAR NOT NULL, status VARCHAR NOT NULL, captured_at TIMESTAMPTZ NOT NULL,"
+            " duration_ms BIGINT NOT NULL, final_url VARCHAR, http_status INTEGER,"
+            " screenshot_path VARCHAR, html_path VARCHAR, signals JSON, error VARCHAR)"
+        )
+        con.execute(
+            "INSERT INTO captures VALUES (1, 'old.com', 'https://old.com/', 'ok', ?, 1,"
+            " NULL, NULL, NULL, NULL, NULL, NULL)",
+            [NOW],
+        )
+
+    store = MatchStore(db, 0.7)
+    store.save_capture(
+        CaptureResult("new.com", "https://new.com/", CaptureStatus.OK, NOW, 1),
+        vantage="aws-eu-north-1",
+    )
+
+    with duckdb.connect(str(db), read_only=True) as con:
+        rows = con.execute("SELECT fqdn, vantage FROM captures ORDER BY fqdn").fetchall()
+    # The old row stays unknown rather than being guessed.
+    assert rows == [("new.com", "aws-eu-north-1"), ("old.com", None)]

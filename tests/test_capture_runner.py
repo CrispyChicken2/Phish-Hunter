@@ -93,6 +93,26 @@ async def test_results_with_rejections_are_kept_for_inspection(
     assert results_path(config.output_dir, jobs[0].job_id).exists()
 
 
+async def test_captures_are_filed_under_the_hosts_vantage_point(
+    store: MatchStore, tmp_path: Path
+) -> None:
+    """Both the container's results and the host's own error rows carry it."""
+    config = CaptureConfig(output_dir=tmp_path / "captures", vantage="aws-eu-north-1")
+    two = [*TARGETS, PendingCapture("silent.test", "silent.test", "paypal", 0.8)]
+
+    async def container(job: CaptureJob, root: Path) -> None:
+        ResultWriter(root, job.job_id).write(timeout_result("evil.test"))  # silent.test: none
+
+    await run_captures(store, config, targets=two, executor=container)
+
+    with duckdb.connect(str(store.db_path), read_only=True) as con:
+        rows = con.execute("SELECT fqdn, status, vantage FROM captures ORDER BY fqdn").fetchall()
+    assert rows == [
+        ("evil.test", "timeout", "aws-eu-north-1"),
+        ("silent.test", "error", "aws-eu-north-1"),
+    ]
+
+
 async def test_a_site_whose_result_is_refused_is_not_retried_every_batch(
     store: MatchStore, config: CaptureConfig
 ) -> None:

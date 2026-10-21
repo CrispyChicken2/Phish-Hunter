@@ -108,7 +108,7 @@ async def test_one_failed_save_does_not_abandon_the_batch(tmp_path: Path) -> Non
                 PendingCapture(f"site{i}.test", f"site{i}.test", "paypal", 0.9) for i in range(3)
             ]
 
-        def save_capture(self, result: CaptureResult) -> None:
+        def save_capture(self, result: CaptureResult, vantage: str | None = None) -> None:
             if result.fqdn == "site1.test":
                 raise LockContentionError("locked by another process")
             saved.append(result.fqdn)

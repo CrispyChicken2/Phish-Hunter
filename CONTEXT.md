@@ -30,5 +30,8 @@ A Match whose score is above the alert threshold. Only Alerts are sent to captur
 **Verdict**
 The classification of an Alert's live site: `phishing`, `parked`, `legitimate` or `unreachable`.
 
+**Vantage point**
+The network location a Capture is made from, recorded with it as a short label (`aws-eu-north-1`, `home`). Phishing kits often show a harmless page to cloud and scanner addresses and the real one to home connections (cloaking), so the same site captured from two Vantage points can differ. Set by the host from its configuration, never by the capture container. Empty for captures made before it was recorded.
+
 **Feed entry**
 A URL listed by a public phishing feed (OpenPhish) that mentions a Brand, found by plain substring search, never by scoring. Feed entries are captured and given a Verdict so detection can be measured on known phishing, but they are not Alerts: they are never announced, and the feed's terms keep them out of the repository (`docs/feed-data.md`).

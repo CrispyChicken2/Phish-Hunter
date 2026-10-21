@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from lookalike_hunter.config import Settings, load_settings
+from lookalike_hunter.config import CaptureConfig, Settings, load_settings
 
 DEFAULT = Path(__file__).parents[1] / "configs" / "default.yaml"
 
@@ -91,3 +91,15 @@ def test_aws_profile_loads_and_keeps_the_brands(monkeypatch: pytest.MonkeyPatch)
     assert aws.classify.backend == "mistral"
     assert {b.name for b in aws.brands} == {b.name for b in base.brands}
     assert aws.scoring.alert_threshold == base.scoring.alert_threshold
+
+
+def test_the_aws_profile_records_its_vantage_point(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("LH_CAPTURE__VANTAGE", raising=False)
+    assert _load_with(monkeypatch, DEFAULT, "aws").capture.vantage == "aws-eu-north-1"
+    assert _load_with(monkeypatch, DEFAULT, None).capture.vantage is None
+
+
+@pytest.mark.parametrize("label", ["../home", "Home PC", "", "x" * 64])
+def test_a_vantage_point_is_a_short_plain_label(label: str) -> None:
+    with pytest.raises(ValueError, match="vantage"):
+        CaptureConfig(vantage=label)

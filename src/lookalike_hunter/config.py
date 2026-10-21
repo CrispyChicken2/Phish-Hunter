@@ -98,6 +98,11 @@ class CaptureConfig(BaseModel):
     max_per_run: int = 20
     # Re-capture a domain only after this many hours.
     recapture_after_h: float = 24.0
+    # The Vantage point these captures are made from (CONTEXT.md), stored with each
+    # one so the same site can be compared across networks (P2.3). A short label,
+    # e.g. "aws-eu-north-1" or "home". None means not recorded, as for every capture
+    # made before it existed.
+    vantage: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9-]{0,62}$")
 
 
 class ClassifyConfig(BaseModel):

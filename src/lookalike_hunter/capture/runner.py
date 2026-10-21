@@ -188,7 +188,9 @@ def _save(store: MatchStore, report: ImportReport, job: CaptureJob, stats: Captu
         stats.attempted += 1
         stats.by_status[str(result.status)] += 1
         try:
-            store.save_capture(result)
+            # The job is the host's own object, built from its config, never read back
+            # from the container: a page cannot choose the vantage point it is filed under.
+            store.save_capture(result, vantage=job.config.vantage)
         except (LockContentionError, duckdb.Error) as exc:
             # The screenshot is already on disk; losing the row is bad but it
             # must not cost us the rest of the batch.
@@ -231,7 +233,8 @@ def _record_without_result(store: MatchStore, report: ImportReport, job: Capture
                     captured_at=now,
                     duration_ms=0,
                     error="no valid result from the capture container",
-                )
+                ),
+                vantage=job.config.vantage,
             )
         except (LockContentionError, duckdb.Error) as exc:
             log.error("capture.save_failed", fqdn=fqdn, error=str(exc)[:300])

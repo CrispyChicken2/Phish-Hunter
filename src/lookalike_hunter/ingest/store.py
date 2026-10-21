@@ -164,7 +164,11 @@ CREATE TABLE IF NOT EXISTS captures (
     screenshot_path  VARCHAR,
     html_path        VARCHAR,
     signals          JSON,
-    error            VARCHAR
+    error            VARCHAR,
+    -- Where the visit was made from (CONTEXT.md, Vantage point). Written by the
+    -- host from its configuration, never by the capture container. NULL: not
+    -- recorded, as for captures made before the column existed.
+    vantage          VARCHAR
 );
 
 """
@@ -254,6 +258,7 @@ class MatchStore:
             # columns, so a running install would break on the next write.
             for column, sql_type in MIGRATIONS:
                 con.execute(f"ALTER TABLE verdicts ADD COLUMN IF NOT EXISTS {column} {sql_type}")
+            con.execute("ALTER TABLE captures ADD COLUMN IF NOT EXISTS vantage VARCHAR")
             _widen_verdict_uniqueness(con)
 
     def write(self, rows: Sequence[tuple[Certificate, Match]]) -> int:
@@ -356,14 +361,14 @@ class MatchStore:
         recent = {row[0] for row in rows}
         return [fqdn for fqdn in fqdns if fqdn not in recent]
 
-    def save_capture(self, result: CaptureResult) -> None:
+    def save_capture(self, result: CaptureResult, vantage: str | None = None) -> None:
         with connect_with_retry(self.db_path) as con:
             con.execute(
                 """
                 INSERT INTO captures
                     (fqdn, url, status, captured_at, duration_ms, final_url, http_status,
-                     screenshot_path, html_path, signals, error)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     screenshot_path, html_path, signals, error, vantage)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     result.fqdn,
@@ -379,6 +384,7 @@ class MatchStore:
                     result.html_path.as_posix() if result.html_path else None,
                     json.dumps(asdict(result.signals)) if result.signals else None,
                     result.error,
+                    vantage,
                 ],
             )
 
