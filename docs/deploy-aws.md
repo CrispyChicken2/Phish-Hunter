@@ -217,20 +217,38 @@ Two ways, and only one is safe for the database:
   the instance and deletes the database. Make a backup first (the daily backup, or run
   `systemctl start lookalike-backup.service`) and check it exists in S3.
 
-## 9. Dashboard (not available yet)
+## 9. Dashboard: review and label on your PC
 
-The dashboard (`make dashboard`, port 8501) runs on your PC against a local database.
-There is no dashboard service on the instance yet, and no tested way to open the
-instance's database from your PC. The planned route is an SSM port forward to a
-dashboard bound to `127.0.0.1` on the instance. It is not built. This is a known gap,
-not a step to follow.
+There is no dashboard on the instance. To review findings and label them, copy the
+latest nightly backup and the screenshots to your PC, and run the dashboard there.
+Tested 2026-10-22. Use `PhishHunter-apply`: the `plan` permission set can list objects
+but not read them (403). Downloading changes nothing in AWS.
+
+```powershell
+aws sso login --profile PhishHunter-apply
+$b = terraform -chdir=infra output -raw captures_bucket_name
+$latest = (aws s3 ls "s3://$b/backups/" --profile PhishHunter-apply | Select-String "database-" | Select-Object -Last 1).ToString().Split()[-1]
+New-Item -ItemType Directory -Force dataws | Out-Null
+aws s3 cp "s3://$b/backups/$latest" dataws\ --profile PhishHunter-apply
+tar -xzf "dataws\$latest" -C dataws
+uv run python -c "import duckdb; duckdb.connect('data/aws/lookalike.duckdb').execute('''IMPORT DATABASE 'data/aws/export' ''')"
+aws s3 sync "s3://$b/captures" dataws\captures --exclude "*" --include "*.png" --profile PhishHunter-apply
+$env:LH_DB_PATH = "data/aws/lookalike.duckdb"
+$env:LH_CAPTURE__OUTPUT_DIR = "data/aws/captures"
+uv run --extra dashboard streamlit run src/lookalike_hunter/dashboard/app.py
+```
+
+`data/` is ignored by git. Labels go to `datasets/eval.jsonl` for sites our scoring
+found, and to the git-ignored `datasets/feed/openphish-live.jsonl` for feed sites (the
+feed's terms, `docs/feed-data.md`). Captures from the last 6 hours are still on the
+instance, not yet archived, and the database copy is from the last nightly backup.
 
 ## 10. Destroying everything
 
 Do this only when you decide to remove the deployment. Nothing here runs by itself.
 
 1. **Back up.** Run `systemctl start lookalike-backup.service` and check the new object
-   in the captures bucket's `backups/` prefix. Restores are not tested yet (P1.7). Keep
+   in the captures bucket's `backups/` prefix. A restore was tested on 2026-10-22 (section 9). Keep
    a copy of the database elsewhere if you need it.
 2. **Empty the captures bucket.** It is not set to be emptied on destroy, so Terraform
    cannot delete a non-empty bucket. This removes every capture, so do it on purpose:
