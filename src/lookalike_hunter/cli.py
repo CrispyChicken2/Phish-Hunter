@@ -44,6 +44,7 @@ from lookalike_hunter.eval.report import write_report
 from lookalike_hunter.eval.runner import run_evaluation
 from lookalike_hunter.eval.stats import discordant_counts, mcnemar_exact
 from lookalike_hunter.ingest.pipeline import run_pipeline
+from lookalike_hunter.ingest.rescore import rescore
 from lookalike_hunter.ingest.sources import CertSource, CertstreamSource, ReplaySource
 from lookalike_hunter.ingest.store import MatchStore, PendingCapture, connect_with_retry
 from lookalike_hunter.logging import configure_logging, get_logger
@@ -597,6 +598,34 @@ def cmd_detection(settings: Settings, args: argparse.Namespace) -> None:
             )
 
 
+def cmd_rescore(settings: Settings, args: argparse.Namespace) -> None:
+    """Score stored Matches again with the current configuration."""
+    index = VariantIndex.from_brands(settings.brands, settings.variants.swap_tlds)
+    scorer = Scorer(settings.brands, settings.scoring, index)
+    report = rescore(settings.db_path, scorer, settings.scoring.alert_threshold, apply=args.apply)
+    print(
+        f"{report.checked} stored Match(es) checked, {len(report.changes)} would change: "
+        f"{len(report.now_alerting)} become Alerts, "
+        f"{len(report.no_longer_alerting)} stop being Alerts"
+    )
+    for change in report.changes[: args.limit]:
+        flag = (
+            "  now an Alert"
+            if change in report.now_alerting
+            else "  no longer an Alert"
+            if change in report.no_longer_alerting
+            else ""
+        )
+        print(
+            f"  {change.old_score:.2f} -> {change.new_score:.2f}  "
+            f"{safe_text(change.brand, 10):<10} {safe_text(change.fqdn, 80)}{flag}"
+        )
+    if report.applied:
+        print("Applied." if report.changes else "Nothing to apply.")
+    elif report.changes:
+        print("Dry run: nothing written. Run again with --apply to update these rows.")
+
+
 def install_shutdown_handler() -> None:
     """Turn SIGTERM into KeyboardInterrupt so buffered work is flushed.
 
@@ -782,6 +811,13 @@ def main(argv: list[str] | None = None) -> None:
     )
     detection.add_argument("--list", action="store_true", help="Also list every Feed entry")
     detection.set_defaults(func=cmd_detection)
+
+    rescore_cmd = sub.add_parser(
+        "rescore", help="Recompute stored Matches with the current scoring (dry run by default)"
+    )
+    rescore_cmd.add_argument("--apply", action="store_true", help="Write the new scores")
+    rescore_cmd.add_argument("--limit", type=int, default=30, help="Changes listed in detail")
+    rescore_cmd.set_defaults(func=cmd_rescore)
 
     alerts = sub.add_parser("alerts", help="List recent alerts grouped by registered domain")
     alerts.add_argument("--limit", type=int, default=30)

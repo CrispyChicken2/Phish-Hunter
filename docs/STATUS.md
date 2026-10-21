@@ -103,7 +103,7 @@ Status: `todo`, `doing`, `review` (PR open), `done`, `blocked`.
 
 | ID | Ticket | Status | Notes |
 |---|---|---|---|
-| P3.1 | `rescore` command: recompute stored Matches after the weights change | todo | |
+| P3.1 | `rescore` command: recompute stored Matches after the weights change | review | Built 2026-10-21 (`ingest/rescore.py`). Dry run by default, `--apply` writes in one transaction. Rescores each row with its certificate's stored issuer, since the free-DV bonus depends on it. Rows are updated, never deleted: one now below the storage floor keeps its real score (the Scorer takes an optional `floor`, 0 here) and stops being an Alert; a brand no longer configured scores 0. A row that becomes an Alert enters the capture queue, so it may be visited and announced. Rejected: deleting rows below the floor (irreversible, loses first sighting and capture links); scoring every hostname of stored certificates (creates new Matches, and only certificates that already matched are stored, so it would be a biased sweep). Not run on the instance |
 | P3.2 | Vendored Chrome seccomp profile replacing `seccomp=unconfined`; sandbox kept enabled; a test proves the sandbox starts | todo | Strengthens the container. It does not weaken it |
 | P3.3 | Egress proxy against DNS rebinding: resolve once, check the address, connect to that address | todo | ADR first; ⏸ user approval before implementation |
 

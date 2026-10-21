@@ -112,6 +112,19 @@ on or after the day the feed listed it. Sites on shared platforms (`*.vercel.app
 wildcard certificate, which never names them, so certificate monitoring cannot
 see them at all.
 
+### After changing the scoring
+
+A Match is scored once, when its certificate arrives. After the weights or the
+alert threshold change, bring the stored rows up to date:
+
+```bash
+uv run lookalike-hunter rescore           # dry run: what would change
+uv run lookalike-hunter rescore --apply   # write it
+```
+
+Rows are never deleted: a row now below the storage floor keeps its real score
+and stops being an Alert. A row that becomes an Alert joins the capture queue.
+
 To use a real vision model, put your key in `.env` (never in the YAML):
 
 ```bash

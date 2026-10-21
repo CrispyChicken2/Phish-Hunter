@@ -131,8 +131,15 @@ class Scorer:
         self._keywords = [(skeleton(k), k.lower()) for k in config.sensitive_keywords]
         self._free_dv = [i.lower() for i in config.free_dv_issuers]
 
-    def score(self, raw_hostname: str, issuer_org: str | None = None) -> list[Match]:
-        """Return one Match per Brand whose score is at least the storage floor."""
+    def score(
+        self, raw_hostname: str, issuer_org: str | None = None, floor: float | None = None
+    ) -> list[Match]:
+        """Return one Match per Brand whose score is at least the storage floor.
+
+        ``floor`` overrides the configured storage floor; `rescore` passes 0 so a
+        stored Match that now scores below the floor gets its real score.
+        """
+        store_floor = self._config.store_floor if floor is None else floor
         host = self._parse(raw_hostname)
         if host is None:
             return []
@@ -146,7 +153,7 @@ class Scorer:
                 continue
             features = self._features(host, m, variant_hits, free_dv, full_sk)
             score = self._combine(features)
-            if score >= self._config.store_floor:
+            if score >= store_floor:
                 matches.append(
                     Match(host.fqdn, host.registered_domain, m.brand.name, score, features)
                 )

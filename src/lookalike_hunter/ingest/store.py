@@ -134,9 +134,10 @@ CREATE TABLE IF NOT EXISTS certificates (
 
 -- One row per (Candidate, Brand); the first sighting wins.
 --
--- Consequence worth knowing: a stored score is never updated. After the scoring
--- weights change, rows written earlier keep their old score, so `alerts` can show
--- figures the current configuration would not produce. Evaluation is unaffected,
+-- Consequence worth knowing: ingestion never updates a stored score. After the
+-- scoring weights change, rows written earlier keep their old score, so `alerts`
+-- can show figures the current configuration would not produce, until `rescore
+-- --apply` brings them up to date (ingest/rescore.py). Evaluation is unaffected,
 -- because it re-scores from the hostname rather than reading these rows.
 CREATE TABLE IF NOT EXISTS matches (
     fqdn               VARCHAR NOT NULL,
