@@ -73,6 +73,7 @@ def record_label(
     brand: str | None = None,
     suggestion: str | None = None,
     today: date | None = None,
+    source: str = "alerts",
 ) -> ExistingLabel | None:
     """Set ``fqdn``'s label as a human's; returns what it was before, if anything.
 
@@ -111,8 +112,8 @@ def record_label(
                     "expected": str(label),
                     "suggestion": suggestion,
                     "brand": brand,
-                    # Dashboard findings are what the CT pipeline alerted on.
-                    "source": "alerts",
+                    # Where the site came from: see label_destination.
+                    "source": source,
                     "labelled_at": stamp,
                     "labelled_by": HUMAN,
                     "label_basis": "screenshot",
@@ -123,6 +124,44 @@ def record_label(
         )
     _replace(path, newline.join(lines) + newline)
     return previous
+
+
+# Feed sites labelled in the dashboard. datasets/feed/ is ignored by git: the feed's
+# terms do not allow redistribution (docs/feed-data.md).
+FEED_LABELS_FILE = "openphish-live.jsonl"
+
+
+def feed_dir(dataset_path: Path) -> Path:
+    return dataset_path.parent / "feed"
+
+
+def all_current_labels(dataset_path: Path) -> dict[str, ExistingLabel]:
+    """Labels from the tracked dataset and every local feed file."""
+    labels: dict[str, ExistingLabel] = {}
+    for path in sorted(feed_dir(dataset_path).glob("*.jsonl")):
+        labels.update(current_labels(path))
+    labels.update(current_labels(dataset_path))
+    return labels
+
+
+def label_destination(dataset_path: Path, fqdn: str, found_by_scoring: bool) -> tuple[Path, str]:
+    """Which file a label belongs in, and the ``source`` a new line records.
+
+    A site already labelled is relabelled where it is. Otherwise only a site our
+    own certificate scoring found goes to the tracked dataset. Anything else on
+    the instance was captured from the phishing feed, so it goes to the ignored
+    feed folder. The rule fails safe: deciding by the feed list instead would leak
+    feed sites into git whenever that list is missing from the machine.
+    """
+    fqdn = fqdn.strip().lower()
+    if fqdn in current_labels(dataset_path):
+        return dataset_path, "alerts"
+    for path in sorted(feed_dir(dataset_path).glob("*.jsonl")):
+        if fqdn in current_labels(path):
+            return path, "openphish"
+    if found_by_scoring:
+        return dataset_path, "alerts"
+    return feed_dir(dataset_path) / FEED_LABELS_FILE, "openphish"
 
 
 def _relabelled(

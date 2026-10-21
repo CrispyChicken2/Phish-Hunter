@@ -36,7 +36,8 @@ from lookalike_hunter.eval.feedback import (
     HUMAN,
     REVIEWABLE_LABELS,
     ExistingLabel,
-    current_labels,
+    all_current_labels,
+    label_destination,
     record_label,
 )
 
@@ -66,12 +67,15 @@ def render_review(finding: Finding, existing: ExistingLabel | None, dataset_path
         key=f"review-{finding.fqdn}",
     )
     if st.button("Save label", key=f"save-{finding.fqdn}"):
+        # A score means our own scoring found the site; feed sites stay out of git.
+        path, source = label_destination(dataset_path, finding.fqdn, finding.score > 0)
         record_label(
-            dataset_path,
+            path,
             finding.fqdn,
             Label(choice),
             brand=finding.brand,
             suggestion=finding.label if finding.label in LABEL_COLOURS else None,
+            source=source,
         )
         st.rerun()
 
@@ -143,7 +147,7 @@ def main() -> None:
         limit = st.number_input("Maximum findings", 10, 500, 100, step=10)
         unreviewed = st.checkbox("Only findings I have not labelled", value=False)
 
-    labels = current_labels(settings.dataset_path)
+    labels = all_current_labels(settings.dataset_path)
     findings = load_findings(
         settings.db_path,
         labels=tuple(chosen),

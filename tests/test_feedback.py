@@ -7,8 +7,15 @@ from pathlib import Path
 import pytest
 
 from lookalike_hunter.classify.schema import Label
-from lookalike_hunter.eval.dataset import load_dataset
-from lookalike_hunter.eval.feedback import HUMAN, current_labels, record_label
+from lookalike_hunter.eval.dataset import load_all_datasets, load_dataset
+from lookalike_hunter.eval.feedback import (
+    FEED_LABELS_FILE,
+    HUMAN,
+    all_current_labels,
+    current_labels,
+    label_destination,
+    record_label,
+)
 
 TODAY = date(2026, 10, 3)
 
@@ -140,3 +147,44 @@ def test_windows_line_endings_are_kept(tmp_path: Path) -> None:
     after = path.read_bytes().split(b"\r\n")
     assert b"\n" not in path.read_bytes().replace(b"\r\n", b"")
     assert after[0] == before[0] and after[2] == before[2]
+
+
+# ------------------------------------------------- which file a label belongs in
+
+
+def test_a_site_our_scoring_found_goes_to_the_tracked_dataset(dataset: Path) -> None:
+    assert label_destination(dataset, "paypa1-login.test", found_by_scoring=True) == (
+        dataset,
+        "alerts",
+    )
+
+
+def test_a_site_from_the_feed_stays_out_of_git(dataset: Path) -> None:
+    """The feed's terms forbid publishing its sites; datasets/feed/ is ignored by git."""
+    path, source = label_destination(dataset, "outlook-ashy.vercel.app", found_by_scoring=False)
+    record_label(path, "outlook-ashy.vercel.app", Label.PHISHING, today=TODAY, source=source)
+
+    assert path == dataset.parent / "feed" / FEED_LABELS_FILE
+    assert entries(path)["outlook-ashy.vercel.app"]["source"] == "openphish"
+    assert "outlook-ashy.vercel.app" not in entries(dataset)
+    assert len(load_all_datasets(dataset)) == 3  # the evaluation still reads it
+
+
+def test_a_site_already_labelled_is_relabelled_where_it_is(dataset: Path) -> None:
+    older = dataset.parent / "feed" / "openphish-eval.jsonl"
+    older.parent.mkdir()
+    older.write_text(
+        '{"expected": "phishing", "fqdn": "old-feed.test", "labelled_at": "2026-09-26", '
+        '"source": "openphish"}\n',
+        encoding="utf-8",
+    )
+
+    assert label_destination(dataset, "b.test", found_by_scoring=False) == (dataset, "alerts")
+    assert label_destination(dataset, "old-feed.test", found_by_scoring=True)[0] == older
+
+
+def test_labels_from_both_files_are_shown(dataset: Path) -> None:
+    path, source = label_destination(dataset, "f.test", found_by_scoring=False)
+    record_label(path, "f.test", Label.PARKED, today=TODAY, source=source)
+
+    assert set(all_current_labels(dataset)) == {"a.test", "b.test", "f.test"}
