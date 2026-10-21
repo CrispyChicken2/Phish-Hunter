@@ -1,6 +1,8 @@
 # Browser that visits hostile pages. Kept separate from the rest of the project so
 # the blast radius of a browser compromise is one throwaway container.
-FROM mcr.microsoft.com/playwright/python:v1.63.0-noble
+# Its version must equal the playwright package in uv.lock: the image carries the
+# browsers that one release drives, and no other (tests/test_capture_image.py).
+FROM mcr.microsoft.com/playwright/python:v1.64.0-noble
 
 # Pinned: the image must build the same way tomorrow as today.
 COPY --from=ghcr.io/astral-sh/uv:0.11.21 /uv /usr/local/bin/uv
